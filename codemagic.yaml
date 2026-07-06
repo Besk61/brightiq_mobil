@@ -7,18 +7,14 @@ workflows:
     integrations:
       app_store_connect: Arvonas_API_Key
     
-    # --- İŞTE KRİTİK GERİ GETİRDİĞİMİZ OTOMATİK İMZA BLOĞU ---
     environment:
-      ios_signing:
-        distribution_type: app_store
-        bundle_identifier: com.arvonas.brightiq
+      # DİKKAT: 0. saniyede patlamaması için ios_signing bloğunu buradan tamamen kaldırdık!
       vars:
         XCODE_WORKSPACE: "ios/App/App.xcworkspace"
         XCODE_SCHEME: "App"
       node: 22
       xcode: latest
       cocoapods: default
-    # ---------------------------------------------------------
 
     scripts:
       - name: 1. Node.js ve Eklenti Paketlerini Yükle
@@ -46,7 +42,16 @@ workflows:
           echo "CocoaPods paketleri Apple M2 sunucusunda derleniyor..."
           cd ios/App && pod install --repo-update
 
-      - name: 5. iOS Projesini Derle ve .ipa İmzala
+      # --- İŞTE İMZA KRİZİNİ ÇÖZEN KİLİT ADIM BURASI ---
+      - name: 5. Apple'dan Sertifika ve İmza Profili Çek / Oluştur
+        script: |
+          echo "Codemagic Apple sunucularına bağlanıp kendi imza profilini alıyor/yaratıyor..."
+          app-store-connect fetch-signing-files "com.arvonas.brightiq" --type IOS_APP_STORE --create
+          keychain add-certificates
+          xcode-project use-profiles
+      # ------------------------------------------------
+
+      - name: 6. iOS Projesini Derle ve .ipa İmzala
         script: |
           echo "App Store paketi (.ipa) oluşturuluyor..."
           xcode-project build-ipa \
@@ -60,5 +65,7 @@ workflows:
     publishing:
       app_store_connect:
         auth: integration
-        submit_to_testflight: true
-        submit_to_app_store: false
+        submit_to_testflight: true # Paketi otomatik TestFlight'a atar
+        beta_groups:
+          - "Harici Test Kullanicilari" # App Store Connect > TestFlight altında açtığın dış grubun adı (istersen adını değiştirebilirsin)
+        submit_to_app_store: false # Direkt canlı mağazaya çıkmaması için false
