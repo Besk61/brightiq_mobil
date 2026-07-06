@@ -7,11 +7,8 @@ workflows:
     integrations:
       app_store_connect: Arvonas_API_Key
     
-    # Apple kotası boşaldığı için artık burada hata vermeyecek, sıfırdan kendi profilini üretecek!
+    # 0. saniyede patlamasın diye otomatik imza kontrolünü tamamen kaldırdık!
     environment:
-      ios_signing:
-        distribution_type: app_store
-        bundle_identifier: com.arvonas.brightiq
       vars:
         XCODE_WORKSPACE: "ios/App/App.xcworkspace"
         XCODE_SCHEME: "App"
@@ -45,12 +42,61 @@ workflows:
           echo "CocoaPods paketleri Apple M2 sunucusunda derleniyor..."
           cd ios/App && pod install --repo-update
 
-      - name: 5. iOS Projesini Derle ve .ipa İmzala
+      - name: 5. Apple'dan Profili Çek ve Xcode'u Zorla İmzala (.ipa Oluştur)
         script: |
-          echo "App Store paketi (.ipa) oluşturuluyor..."
-          xcode-project build-ipa \
-            --workspace "$XCODE_WORKSPACE" \
-            --scheme "$XCODE_SCHEME"
+          echo "Apple sunucularından resmi imza profili indiriliyor..."
+          app-store-connect fetch-signing-files "com.arvonas.brightiq" --type IOS_APP_STORE --create
+          keychain add-certificates
+          
+          echo "İndirilen profilin içinden Team ID ve UUID bilgileri dinamik olarak sökülüyor..."
+          PROV_PROFILE=$(ls ~/Library/MobileDevice/Provisioning\ Profiles/*.mobileprovision | head -n 1)
+          TEAM_ID=$(security cms -D -i "$PROV_PROFILE" | grep -A 1 "TeamIdentifier" | grep "<string>" | sed 's/.*<string>\(.*\)<\/string>.*/\1/')
+          PROFILE_UUID=$(security cms -D -i "$PROV_PROFILE" | grep -A 1 "UUID" | grep "<string>" | sed 's/.*<string>\(.*\)<\/string>.*/\1/')
+          
+          echo "Bulunan Team ID: $TEAM_ID"
+          echo "Bulunan Profile UUID: $PROFILE_UUID"
+          
+          echo "Xcode projesinin otomatik imza kilidi kırılıyor ve Manuel imza moduna zorlanıyor..."
+          sed -i '' 's/ProvisioningStyle = Automatic;/ProvisioningStyle = Manual;/g' ios/App/App.xcodeproj/project.pbxproj
+          
+          echo "Uygulama Apple M2 sunucusunda resmi olarak arşivleniyor..."
+          xcodebuild -workspace ios/App/App.xcworkspace \
+            -scheme App \
+            -configuration Release \
+            -archivePath build/ios/xcarchive/App.xcarchive \
+            archive \
+            DEVELOPMENT_TEAM="$TEAM_ID" \
+            PROVISIONING_PROFILE_SPECIFIER="$PROFILE_UUID" \
+            CODE_SIGN_STYLE=Manual \
+            CODE_SIGN_IDENTITY="Apple Distribution" \
+            COMPILER_INDEX_STORE_ENABLE=NO
+            
+          echo "ExportOptions.plist dosyası bulutta otomatik oluşturuluyor..."
+          cat <<EOF > ios/App/ExportOptions.plist
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>method</key>
+              <string>app-store</string>
+              <key>teamID</key>
+              <string>$TEAM_ID</string>
+              <key>signingStyle</key>
+              <string>manual</string>
+              <key>provisioningProfiles</key>
+              <dict>
+                  <key>com.arvonas.brightiq</key>
+                  <string>$PROFILE_UUID</string>
+              </dict>
+          </dict>
+          </plist>
+          EOF
+
+          echo "Final aşaması: .ipa paketi dışarı aktarılıyor..."
+          xcodebuild -exportArchive \
+            -archivePath build/ios/xcarchive/App.xcarchive \
+            -exportPath build/ios/ipa \
+            -exportOptionsPlist ios/App/ExportOptions.plist
 
     artifacts:
       - build/ios/ipa/*.ipa
