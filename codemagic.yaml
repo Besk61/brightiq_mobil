@@ -2,17 +2,17 @@ workflows:
   ios-app-store-build:
     name: BrightIQ iOS App Store & TestFlight Build
     max_build_duration: 60
-    instance_type: mac_mini_m2
+    instance_type: mac_mini_m2 # M2 Apple Silicon çip (iOS 18+ SDK ve sıfır mimari hatası için!)
     
     integrations:
-      app_store_connect: Arvonas_API_Key
+      app_store_connect: Arvonas_API_Key # Codemagic panelinde Apple API anahtarına verdiğin isim
     
     environment:
       vars:
         XCODE_WORKSPACE: "ios/App/App.xcworkspace"
         XCODE_SCHEME: "App"
-      node: 22
-      xcode: latest
+      node: 22 # Capacitor 8'in zorunlu kıldığı Node sürümü
+      xcode: latest # En güncel Xcode sürümünü (16+) kullanır
       cocoapods: default
 
     scripts:
@@ -26,11 +26,14 @@ workflows:
           echo "React / Vite web projesi derleniyor..."
           npm run build
 
-      - name: 3. Capacitor iOS Senkronizasyonu
+      - name: 3. Capacitor iOS Senkronizasyonu ve CocoaPods Kurulumu
         script: |
           echo "Web çıktıları ve eklentiler iOS projesine aktarılıyor..."
-          # KRİTİK DOKUNUŞ: Eğer ios klasörü gitignore yüzünden yoksa, bulutta zorla CocoaPods ile oluşturuyoruz!
-          if [ ! -d "ios" ]; then
+          # KRİTİK DOKUNUŞ: Eğer projede Podfile yoksa (veya eski/bozuk SPM klasörü geldiyse),
+          # bulut sunucusunda CocoaPods altyapısıyla tertemiz bir iOS projesi yaratıyoruz!
+          if [ ! -f "ios/App/Podfile" ]; then
+            echo "Podfile bulunamadı! Bulut sunucusunda CocoaPods altyapısıyla sıfırdan iOS projesi yaratılıyor..."
+            rm -rf ios
             npx cap add ios --packagemanager cocoapods
           fi
           npx cap sync ios
@@ -60,6 +63,6 @@ workflows:
 
     publishing:
       app_store_connect:
-        auth: integration
-        submit_to_testflight: true
-        submit_to_app_store: false
+        auth: integration # Entegrasyon üzerinden Apple API anahtarını kullanır
+        submit_to_testflight: true # Derleme bitince otomatik TestFlight'a yükler
+        submit_to_app_store: false # Mağazaya direkt incelemeye göndermez, önce TestFlight'a düşer
