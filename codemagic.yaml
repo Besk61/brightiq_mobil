@@ -8,9 +8,6 @@ workflows:
       app_store_connect: Arvonas_API_Key
     
     environment:
-      ios_signing:
-        distribution_type: app_store
-        bundle_identifier: com.arvonas.brightiq
       vars:
         XCODE_WORKSPACE: "ios/App/App.xcworkspace"
         XCODE_SCHEME: "App"
@@ -39,14 +36,12 @@ workflows:
           echo "CocoaPods paketleri Apple M2 sunucusunda derleniyor..."
           cd ios/App && pod install --repo-update
 
-      # --- İŞTE EKSİK OLAN VE SORUNU ÇÖZEN KRİTİK ADIM BURASI ---
-      - name: 5. Apple İmza Profillerini Oluştur ve Xcode'a Bağla
+      - name: 5. Apple'dan Sertifika ve İmza Profili Oluştur/Çek
         script: |
-          echo "Apple sunucularından imza profilleri alınıyor/oluşturuluyor..."
+          echo "Codemagic Apple sunucularında kendi sertifikasını ve profilini oluşturuyor..."
           app-store-connect fetch-signing-files "com.arvonas.brightiq" --type IOS_APP_STORE --create
           keychain add-certificates
           xcode-project use-profiles
-      # -----------------------------------------------------------
 
       - name: 6. iOS Projesini Derle ve .ipa İmzala
         script: |
