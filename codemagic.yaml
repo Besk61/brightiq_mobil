@@ -11,7 +11,7 @@ workflows:
       vars:
         XCODE_WORKSPACE: "ios/App/App.xcworkspace"
         XCODE_SCHEME: "App"
-      node: 22 # <--- İŞTE BURAYI 22 YAPTIK (Capacitor 8 için zorunlu!)
+      node: 22
       xcode: latest
       cocoapods: default
 
@@ -29,6 +29,10 @@ workflows:
       - name: 3. Capacitor iOS Senkronizasyonu
         script: |
           echo "Web çıktıları ve eklentiler iOS projesine aktarılıyor..."
+          # KRİTİK DOKUNUŞ: Eğer ios klasörü gitignore yüzünden yoksa, bulutta zorla CocoaPods ile oluşturuyoruz!
+          if [ ! -d "ios" ]; then
+            npx cap add ios --packagemanager cocoapods
+          fi
           npx cap sync ios
 
       - name: 4. CocoaPods Bağımlılıklarını Yenile ve Yükle
