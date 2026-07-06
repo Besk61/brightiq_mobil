@@ -2,18 +2,23 @@ workflows:
   ios-app-store-build:
     name: BrightIQ iOS App Store & TestFlight Build
     max_build_duration: 60
-    instance_type: mac_mini_m2 # M2 Apple Silicon çip (iOS 18+ SDK ve sıfır mimari hatası için!)
+    instance_type: mac_mini_m2
     
     integrations:
-      app_store_connect: Arvonas_API_Key # Codemagic panelinde Apple API anahtarına verdiğin isim
+      app_store_connect: Arvonas_API_Key
     
+    # --- İŞTE KRİTİK GERİ GETİRDİĞİMİZ OTOMATİK İMZA BLOĞU ---
     environment:
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.arvonas.brightiq
       vars:
         XCODE_WORKSPACE: "ios/App/App.xcworkspace"
         XCODE_SCHEME: "App"
-      node: 22 # Capacitor 8'in zorunlu kıldığı Node sürümü
-      xcode: latest # En güncel Xcode sürümünü (16+) kullanır
+      node: 22
+      xcode: latest
       cocoapods: default
+    # ---------------------------------------------------------
 
     scripts:
       - name: 1. Node.js ve Eklenti Paketlerini Yükle
@@ -29,8 +34,6 @@ workflows:
       - name: 3. Capacitor iOS Senkronizasyonu ve CocoaPods Kurulumu
         script: |
           echo "Web çıktıları ve eklentiler iOS projesine aktarılıyor..."
-          # KRİTİK DOKUNUŞ: Eğer projede Podfile yoksa (veya eski/bozuk SPM klasörü geldiyse),
-          # bulut sunucusunda CocoaPods altyapısıyla tertemiz bir iOS projesi yaratıyoruz!
           if [ ! -f "ios/App/Podfile" ]; then
             echo "Podfile bulunamadı! Bulut sunucusunda CocoaPods altyapısıyla sıfırdan iOS projesi yaratılıyor..."
             rm -rf ios
@@ -43,14 +46,7 @@ workflows:
           echo "CocoaPods paketleri Apple M2 sunucusunda derleniyor..."
           cd ios/App && pod install --repo-update
 
-      - name: 5. Apple'dan Sertifika ve İmza Profili Oluştur/Çek
-        script: |
-          echo "Codemagic Apple sunucularında kendi sertifikasını ve profilini oluşturuyor..."
-          app-store-connect fetch-signing-files "com.arvonas.brightiq" --type IOS_APP_STORE --create
-          keychain add-certificates
-          xcode-project use-profiles
-
-      - name: 6. iOS Projesini Derle ve .ipa İmzala
+      - name: 5. iOS Projesini Derle ve .ipa İmzala
         script: |
           echo "App Store paketi (.ipa) oluşturuluyor..."
           xcode-project build-ipa \
@@ -63,6 +59,6 @@ workflows:
 
     publishing:
       app_store_connect:
-        auth: integration # Entegrasyon üzerinden Apple API anahtarını kullanır
-        submit_to_testflight: true # Derleme bitince otomatik TestFlight'a yükler
-        submit_to_app_store: false # Mağazaya direkt incelemeye göndermez, önce TestFlight'a düşer
+        auth: integration
+        submit_to_testflight: true
+        submit_to_app_store: false
