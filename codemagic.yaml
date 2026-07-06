@@ -11,7 +11,7 @@ workflows:
       vars:
         XCODE_WORKSPACE: "ios/App/App.xcworkspace"
         XCODE_SCHEME: "App"
-      node: 20
+      node: 22 # <--- İŞTE BURAYI 22 YAPTIK (Capacitor 8 için zorunlu!)
       xcode: latest
       cocoapods: default
 
