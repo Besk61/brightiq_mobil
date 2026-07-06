@@ -7,8 +7,11 @@ workflows:
     integrations:
       app_store_connect: Arvonas_API_Key
     
+    # Codemagic in Apple dan profili çekmesi için gereken ana blok (Kota açıldığı için artık patlamayacak!):
     environment:
-      # DİKKAT: 0. saniyede patlamaması için ios_signing bloğunu buradan tamamen kaldırdık!
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.arvonas.brightiq
       vars:
         XCODE_WORKSPACE: "ios/App/App.xcworkspace"
         XCODE_SCHEME: "App"
@@ -42,14 +45,10 @@ workflows:
           echo "CocoaPods paketleri Apple M2 sunucusunda derleniyor..."
           cd ios/App && pod install --repo-update
 
-      # --- İŞTE İMZA KRİZİNİ ÇÖZEN KİLİT ADIM BURASI ---
-      - name: 5. Apple'dan Sertifika ve İmza Profili Çek / Oluştur
+      - name: 5. Apple İmza Profillerini Xcode Projesine İşle
         script: |
-          echo "Codemagic Apple sunucularına bağlanıp kendi imza profilini alıyor/yaratıyor..."
-          app-store-connect fetch-signing-files "com.arvonas.brightiq" --type IOS_APP_STORE --create
-          keychain add-certificates
+          echo "Codemagic bulutundan gelen imza profilleri projeye bağlanıyor..."
           xcode-project use-profiles
-      # ------------------------------------------------
 
       - name: 6. iOS Projesini Derle ve .ipa İmzala
         script: |
@@ -65,7 +64,7 @@ workflows:
     publishing:
       app_store_connect:
         auth: integration
-        submit_to_testflight: true # Paketi otomatik TestFlight'a atar
+        submit_to_testflight: true
         beta_groups:
-          - "Harici Test Kullanicilari" # App Store Connect > TestFlight altında açtığın dış grubun adı (istersen adını değiştirebilirsin)
-        submit_to_app_store: false # Direkt canlı mağazaya çıkmaması için false
+          - "Harici Test Kullanicilari" # App Store Connect teki harici test grubunun adı
+        submit_to_app_store: false
