@@ -3,12 +3,14 @@ workflows:
     name: BrightIQ iOS App Store & TestFlight Build
     max_build_duration: 60
     instance_type: mac_mini_m2
-    
+
     integrations:
       app_store_connect: Arvonas_API_Key
-    
-    # 0. saniyede patlamasın diye otomatik imza kontrolünü tamamen kaldırdık!
+
     environment:
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.arvonas.brightiq
       vars:
         XCODE_WORKSPACE: "ios/App/App.xcworkspace"
         XCODE_SCHEME: "App"
@@ -17,90 +19,38 @@ workflows:
       cocoapods: default
 
     scripts:
-      - name: 1. Node.js ve Eklenti Paketlerini Yükle
+      - name: Install npm dependencies
         script: |
-          echo "npm bağımlılıkları kuruluyor..."
           npm install
 
-      - name: 2. Web Uygulamasını Derle (Vite Build)
+      - name: Build web app
         script: |
-          echo "React / Vite web projesi derleniyor..."
           npm run build
 
-      - name: 3. Capacitor iOS Senkronizasyonu ve CocoaPods Kurulumu
+      - name: Sync Capacitor iOS
         script: |
-          echo "Web çıktıları ve eklentiler iOS projesine aktarılıyor..."
-          if [ ! -f "ios/App/Podfile" ]; then
-            echo "Podfile bulunamadı! Bulut sunucusunda CocoaPods altyapısıyla sıfırdan iOS projesi yaratılıyor..."
-            rm -rf ios
-            npx cap add ios --packagemanager cocoapods
-          fi
           npx cap sync ios
 
-      - name: 4. CocoaPods Bağımlılıklarını Yenile ve Yükle
+      - name: Install CocoaPods
         script: |
-          echo "CocoaPods paketleri Apple M2 sunucusunda derleniyor..."
-          cd ios/App && pod install --repo-update
+          cd ios/App
+          pod install --repo-update
 
-      - name: 5. Apple'dan Profili Çek ve Xcode'u Zorla İmzala (.ipa Oluştur)
+      - name: Set up iOS code signing
         script: |
-          echo "Apple sunucularından resmi imza profili indiriliyor..."
-          app-store-connect fetch-signing-files "com.arvonas.brightiq" --type IOS_APP_STORE --create
-          keychain add-certificates
-          
-          echo "İndirilen profilin içinden Team ID ve UUID bilgileri dinamik olarak sökülüyor..."
-          PROV_PROFILE=$(ls ~/Library/MobileDevice/Provisioning\ Profiles/*.mobileprovision | head -n 1)
-          TEAM_ID=$(security cms -D -i "$PROV_PROFILE" | grep -A 1 "TeamIdentifier" | grep "<string>" | sed 's/.*<string>\(.*\)<\/string>.*/\1/')
-          PROFILE_UUID=$(security cms -D -i "$PROV_PROFILE" | grep -A 1 "UUID" | grep "<string>" | sed 's/.*<string>\(.*\)<\/string>.*/\1/')
-          
-          echo "Bulunan Team ID: $TEAM_ID"
-          echo "Bulunan Profile UUID: $PROFILE_UUID"
-          
-          echo "Xcode projesinin otomatik imza kilidi kırılıyor ve Manuel imza moduna zorlanıyor..."
-          sed -i '' 's/ProvisioningStyle = Automatic;/ProvisioningStyle = Manual;/g' ios/App/App.xcodeproj/project.pbxproj
-          
-          echo "Uygulama Apple M2 sunucusunda resmi olarak arşivleniyor..."
-          xcodebuild -workspace ios/App/App.xcworkspace \
-            -scheme App \
-            -configuration Release \
-            -archivePath build/ios/xcarchive/App.xcarchive \
-            archive \
-            DEVELOPMENT_TEAM="$TEAM_ID" \
-            PROVISIONING_PROFILE_SPECIFIER="$PROFILE_UUID" \
-            CODE_SIGN_STYLE=Manual \
-            CODE_SIGN_IDENTITY="Apple Distribution" \
-            COMPILER_INDEX_STORE_ENABLE=NO
-            
-          echo "ExportOptions.plist dosyası bulutta otomatik oluşturuluyor..."
-          cat <<EOF > ios/App/ExportOptions.plist
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-              <key>method</key>
-              <string>app-store</string>
-              <key>teamID</key>
-              <string>$TEAM_ID</string>
-              <key>signingStyle</key>
-              <string>manual</string>
-              <key>provisioningProfiles</key>
-              <dict>
-                  <key>com.arvonas.brightiq</key>
-                  <string>$PROFILE_UUID</string>
-              </dict>
-          </dict>
-          </plist>
-          EOF
+          xcode-project use-profiles
 
-          echo "Final aşaması: .ipa paketi dışarı aktarılıyor..."
-          xcodebuild -exportArchive \
-            -archivePath build/ios/xcarchive/App.xcarchive \
-            -exportPath build/ios/ipa \
-            -exportOptionsPlist ios/App/ExportOptions.plist
+      - name: Build IPA
+        script: |
+          cd ios/App
+          xcode-project build-ipa \
+            --workspace "App.xcworkspace" \
+            --scheme "App"
 
     artifacts:
-      - build/ios/ipa/*.ipa
+      - ios/App/build/ios/ipa/*.ipa
       - /tmp/xcodebuild_logs/*.log
+      - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.dSYM
 
     publishing:
       app_store_connect:
