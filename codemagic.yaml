@@ -7,8 +7,11 @@ workflows:
     integrations:
       app_store_connect: Arvonas_API_Key
     
-    # DİKKAT: 0. saniyede "No matching profiles" deyip patlamaması için ios_signing bloğunu en üstten tamamen kaldırdık!
+    # ARTIK CODEMAGIC KASASINDA HEM ŞİFRE HEM PROFİL OLDUĞU İÇİN ASLA PATLAMAYACAK!
     environment:
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.arvonas.brightiq
       vars:
         XCODE_WORKSPACE: "ios/App/App.xcworkspace"
         XCODE_SCHEME: "App"
@@ -42,14 +45,10 @@ workflows:
           echo "CocoaPods paketleri Apple M2 sunucusunda derleniyor..."
           cd ios/App && pod install --repo-update
 
-      # --- ARTIK KASADA ŞİFRE OLDUĞU İÇİN BURASI TERE YAĞINDAN KIL ÇEKER GİBİ ÇALIŞACAK ---
-      - name: 5. İmza Profillerini Buluttan Çek ve Bağla
+      - name: 5. İmza Profillerini Projeye İşle
         script: |
-          echo "Codemagic kasasındaki şifreli sertifikalar ve profiller Apple'dan çekiliyor..."
-          app-store-connect fetch-signing-files "com.arvonas.brightiq" --type IOS_APP_STORE --create
-          keychain add-certificates
+          echo "Codemagic kasasından gelen imza profili Xcode projesine çakılıyor..."
           xcode-project use-profiles
-      # ---------------------------------------------------------------------------------
 
       - name: 6. iOS Projesini Derle ve .ipa İmzala
         script: |
