@@ -2,17 +2,22 @@ workflows:
   ios-app-store-build:
     name: BrightIQ iOS App Store & TestFlight Build
     max_build_duration: 60
-    instance_type: mac_mini_m2 # M2 Apple Silicon çip (iOS 18+ SDK ve sıfır mimari hatası için!)
+    instance_type: mac_mini_m2
     
+    # --- KRİTİK EKLENEN KISIM BURASI ---
+    integrations:
+      app_store_connect: Arvonas_API_Key # <-- DİKKAT: Codemagic panelinde API anahtarına verdiğin tam adı buraya yazmalısın!
+    # -----------------------------------
+
     environment:
       ios_signing:
-        distribution_type: app_store # Mağaza veya TestFlight için app_store olmalı
-        bundle_identifier: com.arvonas.brightiq # DİKKAT: Buraya Xcode'daki gerçek Bundle ID'ni yaz
+        distribution_type: app_store
+        bundle_identifier: com.arvonas.brightiq # Senin Xcode'daki Bundle ID'n
       vars:
         XCODE_WORKSPACE: "ios/App/App.xcworkspace"
         XCODE_SCHEME: "App"
-      node: 20 # React 19 ve Vite için modern Node sürümü
-      xcode: latest # En güncel Xcode sürümünü (16+) zorla kullanır
+      node: 20
+      xcode: latest
       cocoapods: default
 
     scripts:
@@ -49,6 +54,6 @@ workflows:
 
     publishing:
       app_store_connect:
-        auth: integration # Codemagic arayüzünden bağlayacağın Apple API anahtarını kullanır
-        submit_to_testflight: true # Build bitince otomatik TestFlight'a atar
-        submit_to_app_store: false # Mağazaya direkt incelemeye göndermez, önce TestFlight'a düşer
+        auth: integration
+        submit_to_testflight: true
+        submit_to_app_store: false
