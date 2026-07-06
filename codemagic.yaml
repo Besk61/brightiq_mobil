@@ -7,7 +7,6 @@ workflows:
     integrations:
       app_store_connect: Arvonas_API_Key
     
-    # ARTIK CODEMAGIC KASASINDA HEM ŞİFRE HEM PROFİL OLDUĞU İÇİN ASLA PATLAMAYACAK!
     environment:
       ios_signing:
         distribution_type: app_store
@@ -50,12 +49,19 @@ workflows:
           echo "Codemagic kasasından gelen imza profili Xcode projesine çakılıyor..."
           xcode-project use-profiles
 
-      - name: 6. iOS Projesini Derle ve .ipa İmzala
+      # --- İŞTE CAPACITOR'I ATLATIP APPLE'IN SÜRÜM ENGELİNİ YIKAN KRİTİK ADIM ---
+      - name: 6. Sürüm Numarasını Yükselt, Derle ve .ipa İmzala
         script: |
+          echo "Apple için sürüm numarası 1.0.3 ve derleme numarası dinamik olarak ayarlanıyor..."
+          cd ios/App && agvtool new-marketing-version 1.0.3
+          agvtool new-version -all $BUILD_NUMBER
+          cd ../..
+          
           echo "App Store paketi (.ipa) oluşturuluyor..."
           xcode-project build-ipa \
             --workspace "$XCODE_WORKSPACE" \
             --scheme "$XCODE_SCHEME"
+      # -------------------------------------------------------------------------
 
     artifacts:
       - build/ios/ipa/*.ipa
