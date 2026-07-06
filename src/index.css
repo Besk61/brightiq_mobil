@@ -1,0 +1,86 @@
+@import "tailwindcss";
+
+@theme {
+  --color-primary: #081B3A;
+  --color-accent: #00B66A;
+  --color-warning: #FFC107;
+  --color-danger: #E53935;
+  --color-bg-light: #F6F8FB;
+  --color-card-light: #FFFFFF;
+  --color-text-dark: #0B1F33;
+  --color-text-muted: #64748B;
+  --color-bg-dark: #07111F;
+  --color-card-dark: #101C2E;
+
+  --color-gray-50: #f8fafc;
+  --color-gray-100: #f1f5f9;
+  --color-gray-200: #e2e8f0;
+  --color-gray-800: #1e293b;
+  --color-gray-900: #0f172a;
+}
+
+.dark {
+  --color-primary: #1e3a8a; 
+  --color-accent: #00B66A;
+  --color-bg-light: #07111F;
+  --color-card-light: #101C2E;
+  --color-text-dark: #f1f5f9;
+  --color-text-muted: #94a3b8;
+  --color-gray-50: #0f172a;
+  --color-gray-100: #1e293b;
+  --color-gray-200: #334155;
+  --color-gray-500: #94a3b8;
+  --color-gray-800: #e2e8f0;
+  --color-gray-900: #f8fafc;
+  --color-white: #101C2E; /* override bg-white to dark card */
+  --color-gray-600: #cbd5e1;
+  --color-gray-700: #e2e8f0;
+  --color-black: #ffffff;
+}
+
+.dark input, .dark textarea, .dark select, .dark button {
+  color: var(--color-text-dark);
+}
+
+body {
+  background-color: var(--color-bg-light);
+  color: var(--color-text-dark);
+  -webkit-touch-callout: none; /* iOS Safari */
+  -webkit-user-select: none; /* Safari */
+  user-select: none; /* Non-prefixed version, currently supported by Chrome, Edge, Opera and Firefox */
+}
+
+input, textarea {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.brand-brightiq-logo {
+  color: #0f172a;
+}
+
+.dark .brand-brightiq-logo {
+  color: #ffffff;
+}
+
+.brand-arvonas-logo-dark {
+  display: none;
+}
+
+.dark .brand-arvonas-logo-light {
+  display: none;
+}
+
+.dark .brand-arvonas-logo-dark {
+  display: block;
+}
+
+/* Hide scrollbar for Chrome, Safari and Opera */
+.custom-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+/* Hide scrollbar for IE, Edge and Firefox */
+.custom-scrollbar {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}

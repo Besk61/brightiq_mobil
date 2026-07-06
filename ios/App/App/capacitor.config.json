@@ -1,0 +1,12 @@
+{
+	"appId": "com.arvonas.brightiq",
+	"appName": "BrightIQ",
+	"webDir": "dist",
+	"packageClassList": [
+		"AppPlugin",
+		"DialogPlugin",
+		"LocalNotificationsPlugin",
+		"PushNotificationsPlugin",
+		"StatusBarPlugin"
+	]
+}
