@@ -7,12 +7,8 @@ workflows:
     integrations:
       app_store_connect: Arvonas_API_Key
     
-    # ARTIK BULUT KASAMIZDA ÖZEL ANAHTAR (PRIVATE KEY) VAR!
-    # Bu blok artık 0. saniyede hata vermeyecek; profili çekip hafızaya alacak!
+    # DİKKAT: 0. saniyede "No matching profiles" deyip patlamaması için ios_signing bloğunu en üstten tamamen kaldırdık!
     environment:
-      ios_signing:
-        distribution_type: app_store
-        bundle_identifier: com.arvonas.brightiq
       vars:
         XCODE_WORKSPACE: "ios/App/App.xcworkspace"
         XCODE_SCHEME: "App"
@@ -46,12 +42,14 @@ workflows:
           echo "CocoaPods paketleri Apple M2 sunucusunda derleniyor..."
           cd ios/App && pod install --repo-update
 
-      # --- İŞTE EKSİK PARÇA BURASIYDI ---
-      - name: 5. İmza Profillerini Xcode Projesine Bağla
+      # --- ARTIK KASADA ŞİFRE OLDUĞU İÇİN BURASI TERE YAĞINDAN KIL ÇEKER GİBİ ÇALIŞACAK ---
+      - name: 5. İmza Profillerini Buluttan Çek ve Bağla
         script: |
-          echo "Codemagic hafızasındaki imza profilleri projenin içine çakılıyor..."
+          echo "Codemagic kasasındaki şifreli sertifikalar ve profiller Apple'dan çekiliyor..."
+          app-store-connect fetch-signing-files "com.arvonas.brightiq" --type IOS_APP_STORE --create
+          keychain add-certificates
           xcode-project use-profiles
-      # ----------------------------------
+      # ---------------------------------------------------------------------------------
 
       - name: 6. iOS Projesini Derle ve .ipa İmzala
         script: |
@@ -69,5 +67,5 @@ workflows:
         auth: integration
         submit_to_testflight: true
         beta_groups:
-          - "Harici Test Kullanicilari" # App Store Connect teki grubunun adı
+          - "Harici Test Kullanicilari"
         submit_to_app_store: false
