@@ -3,14 +3,11 @@ workflows:
     name: BrightIQ iOS App Store & TestFlight Build
     max_build_duration: 60
     instance_type: mac_mini_m2
-
+    
     integrations:
       app_store_connect: Arvonas_API_Key
-
+    
     environment:
-      ios_signing:
-        distribution_type: app_store
-        bundle_identifier: com.arvonas.brightiq
       vars:
         XCODE_WORKSPACE: "ios/App/App.xcworkspace"
         XCODE_SCHEME: "App"
@@ -19,38 +16,48 @@ workflows:
       cocoapods: default
 
     scripts:
-      - name: Install npm dependencies
+      - name: 1. Node.js ve Eklenti Paketlerini Yükle
         script: |
+          echo "npm bağımlılıkları kuruluyor..."
           npm install
 
-      - name: Build web app
+      - name: 2. Web Uygulamasını Derle (Vite Build)
         script: |
+          echo "React / Vite web projesi derleniyor..."
           npm run build
 
-      - name: Sync Capacitor iOS
+      - name: 3. Capacitor iOS Senkronizasyonu ve CocoaPods Kurulumu
         script: |
+          echo "Web çıktıları ve eklentiler iOS projesine aktarılıyor..."
+          if [ ! -f "ios/App/Podfile" ]; then
+            echo "Podfile bulunamadı! Bulut sunucusunda CocoaPods altyapısıyla sıfırdan iOS projesi yaratılıyor..."
+            rm -rf ios
+            npx cap add ios --packagemanager cocoapods
+          fi
           npx cap sync ios
 
-      - name: Install CocoaPods
+      - name: 4. CocoaPods Bağımlılıklarını Yenile ve Yükle
         script: |
-          cd ios/App
-          pod install --repo-update
+          echo "CocoaPods paketleri Apple M2 sunucusunda derleniyor..."
+          cd ios/App && pod install --repo-update
 
-      - name: Set up iOS code signing
+      - name: 5. Apple İmza Profillerini Güvenli Kasadan Çek
         script: |
+          echo "Codemagic, UI üzerinden ürettiğin sertifikayı ve profili projeye bağlıyor..."
+          app-store-connect fetch-signing-files "com.arvonas.brightiq" --type IOS_APP_STORE --create
+          keychain add-certificates
           xcode-project use-profiles
 
-      - name: Build IPA
+      - name: 6. iOS Projesini Derle ve .ipa İmzala
         script: |
-          cd ios/App
+          echo "App Store paketi (.ipa) oluşturuluyor..."
           xcode-project build-ipa \
-            --workspace "App.xcworkspace" \
-            --scheme "App"
+            --workspace "$XCODE_WORKSPACE" \
+            --scheme "$XCODE_SCHEME"
 
     artifacts:
-      - ios/App/build/ios/ipa/*.ipa
+      - build/ios/ipa/*.ipa
       - /tmp/xcodebuild_logs/*.log
-      - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.dSYM
 
     publishing:
       app_store_connect:
