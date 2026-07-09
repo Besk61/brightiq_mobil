@@ -8,6 +8,8 @@ workflows:
       app_store_connect: Arvonas_API_Key
     
     environment:
+      groups:
+        - test
       ios_signing:
         distribution_type: app_store
         bundle_identifier: com.arvonas.brightiq
@@ -35,6 +37,7 @@ workflows:
           if [ -z "$GOOGLE_SERVICE_INFO_PLIST_B64" ]; then
             echo "HATA: GOOGLE_SERVICE_INFO_PLIST_B64 environment variable bulunamadı."
             echo "Codemagic > Environment variables içine GoogleService-Info.plist dosyasının base64 halini secure variable olarak eklemelisin."
+            echo "Not: Variable bir gruptaysa, bu grup codemagic.yaml içinde environment > groups altında import edilmelidir."
             exit 1
           fi
 
