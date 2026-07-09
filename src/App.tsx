@@ -11,6 +11,7 @@ import Cameras from "./screens/Cameras";
 import Modules from "./screens/Modules";
 import Reports from "./screens/Reports";
 import Settings from "./screens/Settings";
+import { FCM } from '@capacitor-community/fcm';
 import { apiGet, apiPost, resolveImageUrl } from "./api";
 import { Capacitor } from '@capacitor/core';
 import { App as CapacitorApp } from '@capacitor/app';
@@ -209,14 +210,37 @@ export default function App() {
       StatusBar.setOverlaysWebView({ overlay: true }).catch(() => {});
       StatusBar.setStyle({ style: Style.Dark }).catch(() => {});
 
-      PushNotifications.requestPermissions().then(result => {
-        if (result.receive === 'granted') {
-          PushNotifications.register();
+      // 1. ÖNCE DİNLEYİCİLERİ KURUYORUZ (Token geldiğinde kaçırmamak için)
+      PushNotifications.addListener('registration', async (token) => {
+        let tokenToSend = token.value;
+        
+        // KRİTİK DOKUNUŞ: Eğer cihaz iOS ise Apple APNs token'ını gerçek FCM token'ına çevir!
+        if (Capacitor.getPlatform() === 'ios') {
+          try {
+            const fcmResult = await FCM.getToken();
+            tokenToSend = fcmResult.token;
+            console.log('[FCM] iOS için dönüştürülen GERÇEK FCM Token: ' + tokenToSend);
+          } catch (err) {
+            console.error('[FCM] iOS Token dönüştürme hatası:', err);
+          }
+        } else {
+          console.log('[FCM] Android Push token: ' + tokenToSend);
+        }
+
+        // Şimdi backend'imize %100 doğru olan FCM token gidiyor!
+        try {
+          await apiPost("/api/auth/set-device-token", {
+            deviceToken: tokenToSend,
+            deviceType: "MOBILE"
+          }, authToken);
+          console.log('[FCM] Gerçek Token başarıyla backend e iletildi.');
+        } catch (error) {
+          console.error('[FCM] Token backende iletilemedi:', error);
         }
       });
 
-      PushNotifications.addListener('registration', (token) => {
-        console.log('[FCM] Push registration token: ' + token.value);
+      PushNotifications.addListener('registrationError', (error) => {
+        console.error('[FCM] Push kayıt hatası: ', JSON.stringify(error));
       });
 
       PushNotifications.addListener('pushNotificationReceived', (notification) => {
@@ -255,6 +279,29 @@ export default function App() {
       });
       
       pushListenersSet = true;
+
+      // 2. ŞİMDİ İZİN KONTROLÜ VE POP-UP TETİKLEME (Asenkron güvenli yöntem)
+      const registerPushNotifications = async () => {
+        try {
+          let permStatus = await PushNotifications.checkPermissions();
+          
+          if (permStatus.receive === 'prompt') {
+            permStatus = await PushNotifications.requestPermissions();
+          }
+          
+          if (permStatus.receive !== 'granted') {
+            console.log('[FCM] Kullanıcı bildirim iznini reddetti!');
+            return;
+          }
+
+          // İzin verildiyse Apple APNs sunucularına kayıt ol
+          await PushNotifications.register();
+        } catch (e) {
+          console.error('[FCM] İzin isteme sırasında hata:', e);
+        }
+      };
+
+      registerPushNotifications();
     }
 
     return () => {
@@ -345,8 +392,18 @@ export default function App() {
         }
       };
 
-      PushNotifications.addListener('registration', (token) => {
-        complete(token.value);
+      PushNotifications.addListener('registration', async (token) => {
+        let tokenToSend = token.value;
+        if (Capacitor.getPlatform() === 'ios') {
+          try {
+            const fcmResult = await FCM.getToken();
+            tokenToSend = fcmResult.token;
+            console.log('[FCM] getRealDeviceToken iOS için dönüştürülen GERÇEK FCM Token: ' + tokenToSend);
+          } catch (err) {
+            console.error('[FCM] getRealDeviceToken iOS Token dönüştürme hatası:', err);
+          }
+        }
+        complete(tokenToSend);
       });
 
       PushNotifications.addListener('registrationError', () => {
