@@ -42,7 +42,8 @@ workflows:
       - name: 4. CocoaPods Bağımlılıklarını Yenile ve Yükle
         script: |
           echo "CocoaPods paketleri Apple M2 sunucusunda derleniyor..."
-          cd ios/App && pod install --repo-update
+          cd ios/App
+          pod install --repo-update
 
       - name: 5. İmza Profillerini Projeye İşle
         script: |
