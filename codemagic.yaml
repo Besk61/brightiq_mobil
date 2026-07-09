@@ -29,7 +29,26 @@ workflows:
           echo "React / Vite web projesi derleniyor..."
           npm run build
 
-      - name: 3. Capacitor iOS Senkronizasyonu ve CocoaPods Kurulumu
+      - name: 3. Firebase iOS Yapılandırmasını Hazırla
+        script: |
+          echo "Firebase iOS yapılandırması Codemagic secure env üzerinden hazırlanıyor..."
+          if [ -z "$GOOGLE_SERVICE_INFO_PLIST_B64" ]; then
+            echo "HATA: GOOGLE_SERVICE_INFO_PLIST_B64 environment variable bulunamadı."
+            echo "Codemagic > Environment variables içine GoogleService-Info.plist dosyasının base64 halini secure variable olarak eklemelisin."
+            exit 1
+          fi
+
+          mkdir -p ios/App/App
+          if printf "%s" "$GOOGLE_SERVICE_INFO_PLIST_B64" | base64 --decode > ios/App/App/GoogleService-Info.plist 2>/dev/null; then
+            echo "GoogleService-Info.plist base64 --decode ile oluşturuldu."
+          else
+            printf "%s" "$GOOGLE_SERVICE_INFO_PLIST_B64" | base64 -D > ios/App/App/GoogleService-Info.plist
+            echo "GoogleService-Info.plist base64 -D ile oluşturuldu."
+          fi
+
+          plutil -lint ios/App/App/GoogleService-Info.plist
+
+      - name: 4. Capacitor iOS Senkronizasyonu ve CocoaPods Kurulumu
         script: |
           echo "Web çıktıları ve eklentiler iOS projesine aktarılıyor..."
           if [ ! -f "ios/App/Podfile" ]; then
@@ -39,13 +58,13 @@ workflows:
           fi
           npx cap sync ios
 
-      - name: 4. CocoaPods Bağımlılıklarını Yenile ve Yükle
+      - name: 5. CocoaPods Bağımlılıklarını Yenile ve Yükle
         script: |
           echo "CocoaPods paketleri Apple M2 sunucusunda derleniyor..."
           cd ios/App
           pod install --repo-update
 
-      - name: 5. İmza Profillerini Projeye İşle
+      - name: 6. İmza Profillerini Projeye İşle
         script: |
           echo "Codemagic kasasından gelen imza profili Xcode projesine çakılıyor..."
           echo "macOS AppleDouble dosyaları temizleniyor..."
@@ -55,7 +74,7 @@ workflows:
           xcode-project use-profiles
 
       # --- İŞTE CAPACITOR'I ATLATIP APPLE'IN SÜRÜM ENGELİNİ YIKAN KRİTİK ADIM ---
-      - name: 6. Sürüm Numarasını Yükselt, Derle ve .ipa İmzala
+      - name: 7. Sürüm Numarasını Yükselt, Derle ve .ipa İmzala
         script: |
           echo "Apple için sürüm numarası 1.0.3 ve derleme numarası dinamik olarak ayarlanıyor..."
           cd ios/App && agvtool new-marketing-version 1.0.3
