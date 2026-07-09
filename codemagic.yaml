@@ -48,6 +48,10 @@ workflows:
       - name: 5. İmza Profillerini Projeye İşle
         script: |
           echo "Codemagic kasasından gelen imza profili Xcode projesine çakılıyor..."
+          echo "macOS AppleDouble dosyaları temizleniyor..."
+          find . -name "._*" -print -delete
+          find . -name ".DS_Store" -print -delete
+          find . -name "__MACOSX" -type d -prune -print -exec rm -rf {} \;
           xcode-project use-profiles
 
       # --- İŞTE CAPACITOR'I ATLATIP APPLE'IN SÜRÜM ENGELİNİ YIKAN KRİTİK ADIM ---
