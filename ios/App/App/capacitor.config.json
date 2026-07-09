@@ -3,6 +3,7 @@
 	"appName": "BrightIQ",
 	"webDir": "dist",
 	"packageClassList": [
+		"FCMPlugin",
 		"AppPlugin",
 		"DialogPlugin",
 		"LocalNotificationsPlugin",

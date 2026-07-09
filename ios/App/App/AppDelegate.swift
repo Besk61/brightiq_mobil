@@ -1,10 +1,7 @@
 import UIKit
 import Capacitor
-<<<<<<< HEAD
 import FirebaseCore // <--- 1. BUNU EN ÜSTE EKLE
 import FirebaseMessaging
-=======
->>>>>>> 253ebc1ece8e75fb53e45316a24c8cde98b18345
 
 @UIApplicationMain
 class AppDelegate: UIResponder, UIApplicationDelegate {
@@ -13,10 +10,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
         // Override point for customization after application launch.
-<<<<<<< HEAD
         FirebaseApp.configure()
-=======
->>>>>>> 253ebc1ece8e75fb53e45316a24c8cde98b18345
         return true
     }
 
@@ -54,7 +48,6 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         // tracking app url opens, make sure to keep this call
         return ApplicationDelegateProxy.shared.application(application, continue: userActivity, restorationHandler: restorationHandler)
     }
-<<<<<<< HEAD
     
     func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
             Messaging.messaging().apnsToken = deviceToken
@@ -64,7 +57,5 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {
             NotificationCenter.default.post(name: .capacitorDidFailToRegisterForRemoteNotifications, object: error)
         }
-=======
->>>>>>> 253ebc1ece8e75fb53e45316a24c8cde98b18345
 
 }
