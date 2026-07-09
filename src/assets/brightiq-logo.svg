@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <svg
    xmlns:dc="http://purl.org/dc/elements/1.1/"
@@ -44,4 +45,52 @@
          id="tspan32"
          y="0"
          x="0 515.32843 818.13379 1037.8475 1497.2488 1947.8616 2221.9045 2463.1899">BrightIQ</tspan></text>
+=======
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg
+   xmlns:dc="http://purl.org/dc/elements/1.1/"
+   xmlns:cc="http://creativecommons.org/ns#"
+   xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+   xmlns:svg="http://www.w3.org/2000/svg"
+   xmlns="http://www.w3.org/2000/svg"
+   viewBox="0 0 6047.2402 2645.6667"
+   height="2645.6667"
+   width="6047.2402"
+   xml:space="preserve"
+   id="svg2"
+   version="1.1"><metadata
+     id="metadata8"><rdf:RDF><cc:Work
+         rdf:about=""><dc:format>image/svg+xml</dc:format><dc:type
+           rdf:resource="http://purl.org/dc/dcmitype/StillImage" /></cc:Work></rdf:RDF></metadata><defs
+     id="defs6"><linearGradient
+       id="linearGradient28"
+       spreadMethod="pad"
+       gradientTransform="matrix(-825.2121,-7.3138661,-7.3138661,825.2121,1163.8004,935.35498)"
+       gradientUnits="userSpaceOnUse"
+       y2="0"
+       x2="1"
+       y1="0"
+       x1="0"><stop
+         id="stop24"
+         offset="0"
+         style="stop-opacity:1;stop-color:#b816f0" /><stop
+         id="stop26"
+         offset="1"
+         style="stop-opacity:1;stop-color:#00f1ff" /></linearGradient></defs><g
+     transform="matrix(1.3333333,0,0,-1.3333333,0,2645.6667)"
+     id="g10"><g
+       id="g12"><g
+         id="g14"><g
+           id="g20"><g
+             id="g22"><path
+               id="path30"
+               style="fill:url(#linearGradient28);stroke:none"
+               d="m 685.116,1340.208 c -26.176,-4.248 -23.034,-43.267 3.48,-43.267 v 0 h 146.005 c 29.241,0 29.241,-48.697 0,-48.697 v 0 H 493.475 c -28.56,0 -40.372,-48.696 -5.748,-48.696 v 0 h 19.247 c 29.235,0 29.235,-48.695 0,-48.695 v 0 h -93.781 c -27.437,0 -35.715,-48.703 -2.949,-48.703 v 0 h 15.092 c 29.234,0 29.234,-48.696 0,-48.696 v 0 h -52.495 c -28.001,0 -32.351,-48.697 -1.318,-48.697 v 0 h 175.738 c 29.241,0 29.241,-48.696 0,-48.696 v 0 H 359.996 c -29.233,0 -29.261,-48.696 0,-48.696 v 0 h 83.359 c 29.235,0 29.235,-48.703 0,-48.703 v 0 h -71.827 c -31.045,0 -26.675,-48.697 1.313,-48.697 v 0 H 606.64 c 29.242,0 29.242,-48.702 0,-48.702 v 0 H 410.238 c -32.773,0 -24.482,-48.697 2.955,-48.697 v 0 h 351.412 c 29.235,0 29.235,-48.696 0,-48.696 v 0 h -276.91 c -19.89,0 -29.358,-24.422 -14.709,-37.845 v 0 C 548.728,556.732 647.355,518.054 752.149,517.77 v 0 c 22.664,0.064 45.04,1.883 67.035,5.44 v 0 c 26.183,4.241 23.041,43.269 -3.48,43.269 v 0 H 695.766 c -29.235,0 -29.235,48.696 0,48.696 v 0 h 315.059 c 5.502,0 10.236,1.784 14.372,5.416 v 0 c 35.17,30.896 64.898,67.527 87.827,108.209 v 0 c 8.208,14.561 -2.254,32.463 -18.968,32.463 v 0 H 921.622 c -29.24,0 -29.24,48.702 0,48.702 v 0 h 209.844 c 28,0 32.346,48.697 1.311,48.697 v 0 h -129.509 c -29.235,0 -29.235,48.703 0,48.703 v 0 h 141.036 c 29.241,0 29.261,48.696 0,48.696 v 0 H 868.608 c -29.234,0 -29.234,48.696 0,48.696 v 0 h 264.163 c 31.047,0 26.677,48.697 -1.311,48.697 v 0 H 937.526 c -29.236,0 -29.236,48.696 0,48.696 v 0 h 156.549 c 16.702,0 27.177,17.882 18.987,32.441 v 0 c -72.643,129.253 -209.511,210.643 -360.913,211.052 v 0 c -22.655,-0.066 -45.032,-1.876 -67.033,-5.435" /></g></g></g></g><text
+       id="text34"
+       style="font-variant:normal;font-weight:900;font-stretch:normal;font-size:798.95880127px;font-family:Roboto;-inkscape-font-specification:Roboto-Black;writing-mode:lr-tb;fill:#0b0b3b;fill-opacity:1;fill-rule:nonzero;stroke:none"
+       transform="matrix(1,0,0,-1,1243.8979,668.2236)"><tspan
+         id="tspan32"
+         y="0"
+         x="0 515.32843 818.13379 1037.8475 1497.2488 1947.8616 2221.9045 2463.1899">BrightIQ</tspan></text>
+>>>>>>> 253ebc1ece8e75fb53e45316a24c8cde98b18345
 </g></svg>
