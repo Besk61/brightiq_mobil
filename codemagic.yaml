@@ -66,6 +66,22 @@ workflows:
           xcode-project build-ipa \
             --workspace "$XCODE_WORKSPACE" \
             --scheme "$XCODE_SCHEME"
+
+          echo "İmzalanmış IPA entitlements kontrol ediliyor..."
+          IPA_PATH=$(find build/ios/ipa -name "*.ipa" -type f | head -n 1)
+          if [ -n "$IPA_PATH" ]; then
+            rm -rf /tmp/brightiq_ipa_check
+            mkdir -p /tmp/brightiq_ipa_check
+            unzip -q "$IPA_PATH" -d /tmp/brightiq_ipa_check
+            APP_PATH=$(find /tmp/brightiq_ipa_check/Payload -name "*.app" -type d | head -n 1)
+            if [ -n "$APP_PATH" ]; then
+              codesign -d --entitlements :- "$APP_PATH" || true
+            else
+              echo "IPA içinde .app bulunamadı."
+            fi
+          else
+            echo "IPA bulunamadı; entitlement kontrolü atlandı."
+          fi
       # -------------------------------------------------------------------------
 
     artifacts:
