@@ -15,11 +15,11 @@ class AppDelegate: UIResponder, UIApplicationDelegate, MessagingDelegate {
     }
 
     func applicationWillResignActive(_ application: UIApplication) {
-        // Sent when the application is about to move from active to inactive state.
+        // Sent when the application changes from active to inactive state.
     }
 
     func applicationDidEnterBackground(_ application: UIApplication) {
-        // Use this method to release shared resources, save user data, invalidate timers, and store enough application state information.
+        // Use this method to release shared resources and save user data.
     }
 
     func applicationWillEnterForeground(_ application: UIApplication) {
@@ -44,12 +44,16 @@ class AppDelegate: UIResponder, UIApplicationDelegate, MessagingDelegate {
 
     func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
         #if DEBUG
+        print("[FCM] APNs token registered as sandbox")
         Messaging.messaging().setAPNSToken(deviceToken, type: .sandbox)
         #else
+        print("[FCM] APNs token registered as production")
         Messaging.messaging().setAPNSToken(deviceToken, type: .prod)
         #endif
 
-        Messaging.messaging().apnsToken = deviceToken
+        // Do not also assign Messaging.messaging().apnsToken here.
+        // setAPNSToken(_:type:) is explicit; assigning apnsToken afterwards can re-infer the environment
+        // and may produce FCM tokens bound to the wrong APNs environment.
         NotificationCenter.default.post(name: .capacitorDidRegisterForRemoteNotifications, object: deviceToken)
     }
 
