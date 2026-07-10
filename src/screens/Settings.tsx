@@ -1,6 +1,9 @@
-import { Activity, Bell, Camera, FileText, LogOut, MessageSquare, Monitor, Moon, Shield, Siren, Sun } from "lucide-react";
+import { Activity, Bell, Camera, Copy, FileText, LogOut, MessageSquare, Monitor, Moon, RefreshCw, Shield, Siren, Sun } from "lucide-react";
 import type { ElementType } from "react";
 import { useEffect, useState } from "react";
+import { Capacitor } from "@capacitor/core";
+import { PushNotifications } from "@capacitor/push-notifications";
+import { FCM } from "@capacitor-community/fcm";
 import { apiGet, apiPost } from "../api";
 import {
   loadNotificationPreferences,
@@ -44,11 +47,35 @@ const notificationRows: Array<{
   { key: "criticalAlways", title: "Kritik Alarmları Her Zaman Bildir", description: "Kritik alarmları alarm ayarı kapalı olsa bile gösterir.", icon: Shield },
 ];
 
+const STORAGE_PUSH_DEBUG_TOKEN = "brightiq_mobile_last_fcm_token";
+const STORAGE_PUSH_DEBUG_STATUS = "brightiq_mobile_push_debug_status";
+const STORAGE_PUSH_DEBUG_UPDATED_AT = "brightiq_mobile_push_debug_updated_at";
+
 function formatLicenseDate(value?: string) {
   if (!value) return "-";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "-";
   return new Intl.DateTimeFormat("tr-TR", { dateStyle: "long" }).format(date);
+}
+
+function formatDebugDate(value?: string | null) {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+  return new Intl.DateTimeFormat("tr-TR", {
+    dateStyle: "short",
+    timeStyle: "medium",
+  }).format(date);
+}
+
+function maskToken(value?: string | null) {
+  if (!value) return "Token yok";
+  if (value.length <= 24) return value;
+  return `${value.slice(0, 12)}...${value.slice(-12)}`;
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
 
 function Toggle({ checked, onClick }: { checked: boolean; onClick: () => void }) {
@@ -81,6 +108,10 @@ export default function Settings({ authToken, onLogout }: SettingsProps) {
   const [features, setFeatures] = useState<CompanyFeature[]>([]);
   const [isLoadingFeatures, setIsLoadingFeatures] = useState(true);
   const [notificationPreferences, setNotificationPreferences] = useState<NotificationPreferences>(() => loadNotificationPreferences());
+  const [pushDebugToken, setPushDebugToken] = useState(() => localStorage.getItem(STORAGE_PUSH_DEBUG_TOKEN) || "");
+  const [pushDebugStatus, setPushDebugStatus] = useState(() => localStorage.getItem(STORAGE_PUSH_DEBUG_STATUS) || "Henüz FCM token alınmadı.");
+  const [pushDebugUpdatedAt, setPushDebugUpdatedAt] = useState(() => localStorage.getItem(STORAGE_PUSH_DEBUG_UPDATED_AT) || "");
+  const [isRefreshingPushToken, setIsRefreshingPushToken] = useState(false);
 
   useEffect(() => {
     if (!authToken) return;
@@ -110,6 +141,19 @@ export default function Settings({ authToken, onLogout }: SettingsProps) {
 
     fetchSettings();
   }, [authToken]);
+
+  const savePushDebug = (status: string, token?: string) => {
+    const updatedAt = new Date().toISOString();
+    setPushDebugStatus(status);
+    setPushDebugUpdatedAt(updatedAt);
+    localStorage.setItem(STORAGE_PUSH_DEBUG_STATUS, status);
+    localStorage.setItem(STORAGE_PUSH_DEBUG_UPDATED_AT, updatedAt);
+
+    if (token) {
+      setPushDebugToken(token);
+      localStorage.setItem(STORAGE_PUSH_DEBUG_TOKEN, token);
+    }
+  };
 
   const getLicenseCards = () => {
     if (isLoadingFeatures) {
@@ -179,6 +223,84 @@ export default function Settings({ authToken, onLogout }: SettingsProps) {
     const next = { ...notificationPreferences, frequency };
     setNotificationPreferences(next);
     saveNotificationPreferences(next);
+  };
+
+  const handleCopyPushToken = async () => {
+    if (!pushDebugToken) {
+      savePushDebug("Kopyalanacak FCM token yok. Önce tokenı yenile.");
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(pushDebugToken);
+      savePushDebug("FCM token panoya kopyalandı.", pushDebugToken);
+    } catch {
+      savePushDebug("Token kopyalanamadı. iPad izinleri veya clipboard erişimi engellemiş olabilir.", pushDebugToken);
+    }
+  };
+
+  const handleRefreshPushToken = async () => {
+    if (!authToken) {
+      savePushDebug("Oturum yok. Önce tekrar giriş yap.");
+      return;
+    }
+    if (!Capacitor.isNativePlatform()) {
+      savePushDebug("Bu işlem sadece iOS/Android uygulama içinde çalışır.");
+      return;
+    }
+
+    setIsRefreshingPushToken(true);
+    try {
+      savePushDebug("Bildirim izni ve APNs kaydı kontrol ediliyor...", pushDebugToken);
+
+      let permission = await PushNotifications.checkPermissions();
+      if (permission.receive === "prompt") {
+        permission = await PushNotifications.requestPermissions();
+      }
+
+      if (permission.receive !== "granted") {
+        savePushDebug(`Bildirim izni verilmedi: ${permission.receive}`, pushDebugToken);
+        return;
+      }
+
+      await PushNotifications.register();
+
+      let tokenToSend = "";
+      if (Capacitor.getPlatform() === "ios") {
+        for (let attempt = 1; attempt <= 8; attempt += 1) {
+          await sleep(750);
+          try {
+            const fcmResult = await FCM.getToken();
+            if (fcmResult?.token) {
+              tokenToSend = fcmResult.token;
+              break;
+            }
+          } catch (error) {
+            console.error(`[FCM] Token alma denemesi ${attempt} başarısız:`, error);
+          }
+        }
+      } else {
+        const fcmResult = await FCM.getToken();
+        tokenToSend = fcmResult?.token || "";
+      }
+
+      if (!tokenToSend) {
+        savePushDebug("FCM token alınamadı. Firebase/APNs bağlantısı veya izin akışı kontrol edilmeli.", pushDebugToken);
+        return;
+      }
+
+      await apiPost("/api/auth/set-device-token", {
+        deviceToken: tokenToSend,
+        deviceType: "MOBILE"
+      }, authToken);
+
+      savePushDebug("FCM token alındı ve backend'e tekrar gönderildi.", tokenToSend);
+    } catch (error: any) {
+      console.error("[FCM] Debug token yenileme hatası:", error);
+      savePushDebug(error?.message ? `Hata: ${error.message}` : "Token yenilenirken bilinmeyen hata oluştu.", pushDebugToken);
+    } finally {
+      setIsRefreshingPushToken(false);
+    }
   };
 
   return (
@@ -266,6 +388,46 @@ export default function Settings({ authToken, onLogout }: SettingsProps) {
               <span className="text-sm text-text-muted">dakika altındaki kesintiler bildirilmez.</span>
             </div>
           </div>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+        <div className="flex items-center justify-between gap-3 mb-3">
+          <div>
+            <h3 className="font-bold text-sm text-text-dark">Bildirim Debug</h3>
+            <p className="text-xs text-gray-500">TestFlight cihazındaki gerçek FCM tokenı ve backend kaydını kontrol eder.</p>
+          </div>
+          <Bell className="w-5 h-5 text-gray-400 flex-shrink-0" />
+        </div>
+
+        <div className="space-y-2 text-xs">
+          <div className="bg-gray-50 border border-gray-100 rounded-lg p-3">
+            <div className="text-gray-500 font-medium mb-1">FCM Token</div>
+            <div className="break-all text-text-dark font-mono">{maskToken(pushDebugToken)}</div>
+          </div>
+          <div className="text-gray-500">Durum: {pushDebugStatus}</div>
+          <div className="text-gray-500">Son güncelleme: {formatDebugDate(pushDebugUpdatedAt)}</div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2 mt-3">
+          <button
+            type="button"
+            onClick={handleRefreshPushToken}
+            disabled={isRefreshingPushToken}
+            className="bg-primary text-white py-3 rounded-xl text-xs font-semibold disabled:opacity-50 flex items-center justify-center gap-2"
+          >
+            <RefreshCw className={cn("w-4 h-4", isRefreshingPushToken && "animate-spin")} />
+            {isRefreshingPushToken ? "Yenileniyor" : "Tokenı Yenile"}
+          </button>
+          <button
+            type="button"
+            onClick={handleCopyPushToken}
+            disabled={!pushDebugToken}
+            className="bg-gray-100 text-text-dark py-3 rounded-xl text-xs font-semibold disabled:opacity-50 flex items-center justify-center gap-2"
+          >
+            <Copy className="w-4 h-4" />
+            Kopyala
+          </button>
         </div>
       </div>
 
