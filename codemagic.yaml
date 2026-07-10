@@ -31,7 +31,7 @@ workflows:
           echo "React / Vite web projesi derleniyor..."
           npm run build
 
-      - name: 3. Firebase iOS Yapılandırmasını Hazırla
+      - name: 3. Firebase ve iOS App Icon Yapılandırmasını Hazırla
         script: |
           echo "Firebase iOS yapılandırması Codemagic secure env üzerinden hazırlanıyor..."
           if [ -z "$GOOGLE_SERVICE_INFO_PLIST_B64" ]; then
@@ -50,6 +50,15 @@ workflows:
           fi
 
           plutil -lint ios/App/App/GoogleService-Info.plist
+
+          echo "BrightIQ iOS app icon oluşturuluyor..."
+          python3 scripts/generate-ios-app-icon.py
+          ICON_PATH="ios/App/App/Assets.xcassets/AppIcon.appiconset/AppIcon-512@2x.png"
+          if [ ! -f "$ICON_PATH" ]; then
+            echo "HATA: App icon oluşturulamadı: $ICON_PATH"
+            exit 1
+          fi
+          sips -g pixelWidth -g pixelHeight "$ICON_PATH"
 
       - name: 4. Capacitor iOS Senkronizasyonu ve CocoaPods Kurulumu
         script: |
