@@ -11,6 +11,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate, MessagingDelegate {
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
         FirebaseApp.configure()
         Messaging.messaging().delegate = self
+        Messaging.messaging().isAutoInitEnabled = true
         return true
     }
 
@@ -51,10 +52,25 @@ class AppDelegate: UIResponder, UIApplicationDelegate, MessagingDelegate {
         Messaging.messaging().setAPNSToken(deviceToken, type: .prod)
         #endif
 
-        // Do not also assign Messaging.messaging().apnsToken here.
-        // setAPNSToken(_:type:) is explicit; assigning apnsToken afterwards can re-infer the environment
-        // and may produce FCM tokens bound to the wrong APNs environment.
-        NotificationCenter.default.post(name: .capacitorDidRegisterForRemoteNotifications, object: deviceToken)
+        // Make sure Firebase has produced the FCM token before Capacitor emits
+        // the registration event. The React side then automatically sends that
+        // FCM token to /api/auth/set-device-token on login and app startup.
+        Messaging.messaging().token { token, error in
+            if let error = error {
+                print("[FCM] Automatic token fetch failed: \(error.localizedDescription)")
+            } else if let token = token {
+                print("[FCM] Automatic token ready: \(token)")
+            } else {
+                print("[FCM] Automatic token fetch returned nil")
+            }
+
+            DispatchQueue.main.async {
+                NotificationCenter.default.post(
+                    name: .capacitorDidRegisterForRemoteNotifications,
+                    object: deviceToken
+                )
+            }
+        }
     }
 
     func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {
