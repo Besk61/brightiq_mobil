@@ -16,18 +16,20 @@ import { apiGet, apiPost, resolveImageUrl } from "./api";
 import { Capacitor } from '@capacitor/core';
 import { App as CapacitorApp } from '@capacitor/app';
 import { PushNotifications } from '@capacitor/push-notifications';
+import { configureNotificationChannels } from './notificationSounds';
 import { StatusBar, Style } from "@capacitor/status-bar";
 import NativeAlertModal, { NativeAlertData } from "./components/NativeAlertModal";
 import {
   isNotificationAllowed,
   loadNotificationPreferences,
+  MINIMUM_DOWNTIME_NOTIFICATION_MINUTES,
   NOTIFICATION_PREFERENCES_EVENT,
   NotificationPreferenceCategory,
   NotificationPreferences,
 } from "./notificationPreferences";
 
 type Tab = "modules" | "home" | "cameras" | "reports" | "settings";
-type ModuleTab = "alerts" | "productivity";
+type ModuleTab = "alerts" | "productivity" | "queueWait" | "coffeePickup" | "queueAbandonment";
 
 type User = {
   id: number;
@@ -139,7 +141,7 @@ function getHealthStatusTime(status: HealthStatus) {
 }
 
 function hasReachedDowntimeThreshold(startTime: number, preferences: NotificationPreferences) {
-  const thresholdMinutes = Math.max(0, preferences.minimumDowntimeMinutes ?? 5);
+  const thresholdMinutes = Math.max(MINIMUM_DOWNTIME_NOTIFICATION_MINUTES, preferences.minimumDowntimeMinutes);
   return (Date.now() - startTime) / 60000 >= thresholdMinutes;
 }
 
@@ -245,6 +247,8 @@ export default function App() {
 
       PushNotifications.addListener('pushNotificationReceived', (notification) => {
         const payloadData = parseNotificationPayload(notification.data);
+        console.log('[FCM] Received notification sound', notification.data?.notificationSound);
+        if (payloadData.type === "notification_sound_test") return;
         const parsedImage = notification.data?.imageUrl || payloadData.image || payloadData.rawImage || undefined;
         const parsedImagePath = typeof parsedImage === "string" ? parsedImage.trim() : "";
         const notificationCategory = getPushNotificationCategory(payloadData);
@@ -275,6 +279,7 @@ export default function App() {
       });
 
       PushNotifications.addListener('pushNotificationActionPerformed', (notification) => {
+        if (parseNotificationPayload(notification.notification.data).type === "notification_sound_test") return;
         openAlertsModule();
       });
       
@@ -283,6 +288,7 @@ export default function App() {
       // 2. ŞİMDİ İZİN KONTROLÜ VE POP-UP TETİKLEME (Asenkron güvenli yöntem)
       const registerPushNotifications = async () => {
         try {
+          await configureNotificationChannels();
           let permStatus = await PushNotifications.checkPermissions();
           
           if (permStatus.receive === 'prompt') {
@@ -356,7 +362,8 @@ export default function App() {
   const addNotification = useCallback((notification: NotificationItem) => {
     setNotifications((prev: NotificationItem[]) => [notification, ...prev].slice(0, 8));
 
-    if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted") {
+    // Native pushes already present the notification with its selected sound.
+    if (!Capacitor.isNativePlatform() && typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted") {
       try {
         new Notification(notification.title, { body: notification.body });
       } catch {
@@ -434,7 +441,7 @@ export default function App() {
     }
   }, [authToken]);
 
-  const handleLogin = async (email: string, password: string) => {
+  const handleLogin = async (email: string, password: string, rememberMe: boolean) => {
     const isMobile = Capacitor.isNativePlatform();
     const dToken = await getRealDeviceToken();
 
@@ -443,6 +450,7 @@ export default function App() {
       password,
       deviceType: isMobile ? "MOBILE" : "WEB",
       deviceToken: dToken,
+      rememberMe,
     });
 
     setAuthToken(loginResult.accessToken);
@@ -450,7 +458,7 @@ export default function App() {
     localStorage.setItem(STORAGE_USER, JSON.stringify(loginResult));
     setAppState("main");
 
-    if (Notification.permission === "default") {
+    if (!isMobile && "Notification" in window && Notification.permission === "default") {
       Notification.requestPermission().catch(() => null);
     }
   };
@@ -602,6 +610,9 @@ export default function App() {
   const showProductivityFeature = features.some((feature: Feature) =>
     ["employee_productivity", "zone_productivity"].includes(feature.codeName)
   );
+  const showCustomerQueueMetricsFeature = features.some((feature: Feature) =>
+    feature.codeName === "customer_queue_metrics"
+  );
 
   const openAlertsModule = () => {
     setRequestedModuleTab("alerts");
@@ -649,6 +660,7 @@ export default function App() {
         <Modules
           authToken={authToken ?? undefined}
           showProductivityFeature={showProductivityFeature}
+          showCustomerQueueMetricsFeature={showCustomerQueueMetricsFeature}
           requestedTab={requestedModuleTab}
           onRequestedTabChange={setRequestedModuleTab}
         />

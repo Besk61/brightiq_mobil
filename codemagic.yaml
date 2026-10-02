@@ -64,9 +64,16 @@ workflows:
         script: |
           echo "Web çıktıları ve eklentiler iOS projesine aktarılıyor..."
           if [ ! -f "ios/App/Podfile" ]; then
-            echo "Podfile bulunamadı! Bulut sunucusunda CocoaPods altyapısıyla sıfırdan iOS projesi yaratılıyor..."
-            rm -rf ios
-            npx cap add ios --packagemanager cocoapods
+            echo "HATA: Mevcut CocoaPods iOS projesi bulunamadi. ios klasorunu yeniden olusturmayin; native sesler ve eklentiler kaybolur."
+            exit 1
+          fi
+          # This repository builds App.xcworkspace with CocoaPods, not the old SPM package.
+          if [ -d "ios/App/CapApp-SPM" ]; then
+            if [ -e "ios/CapApp-SPM-codemagic-backup" ]; then
+              echo "HATA: Eski SPM yedegi zaten var; native proje otomatik degistirilmeyecek."
+              exit 1
+            fi
+            mv ios/App/CapApp-SPM ios/CapApp-SPM-codemagic-backup
           fi
           npx cap sync ios
 
@@ -75,6 +82,10 @@ workflows:
           echo "CocoaPods paketleri Apple M2 sunucusunda derleniyor..."
           cd ios/App
           pod install --repo-update
+
+      - name: iOS bildirim seslerini ve native eklentiyi dogrula
+        script: |
+          ruby scripts/verify-ios-notification-sounds.rb
 
       - name: 6. İmza Profillerini Projeye İşle
         script: |

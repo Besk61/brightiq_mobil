@@ -1,15 +1,22 @@
-import { Activity, Bell, Camera, FileText, LogOut, MessageSquare, Monitor, Moon, Shield, Siren, Sun } from "lucide-react";
+import { Activity, Bell, BellRing, Camera, FileText, LogOut, MessageSquare, Monitor, Moon, Shield, Siren, Sun, Upload, Volume2 } from "lucide-react";
+import { Capacitor } from "@capacitor/core";
 import type { ElementType } from "react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { apiGet, apiPost } from "../api";
 import {
   loadNotificationPreferences,
+  MINIMUM_DOWNTIME_NOTIFICATION_MINUTES,
   NotificationFrequency,
   NotificationPreferenceKey,
   NotificationPreferences,
+  NotificationSoundCategory,
+  NotificationSoundId,
+  NotificationSoundPreferences,
+  notificationSoundOptions,
   saveNotificationPreferences,
 } from "../notificationPreferences";
 import { cn } from "../utils";
+import { installCustomNotificationSound, previewCustomNotificationSound } from "../customNotificationSound";
 
 interface SettingsProps {
   authToken?: string;
@@ -42,6 +49,16 @@ const notificationRows: Array<{
   { key: "cameraHealth", title: "Kamera Sağlık Bildirimleri", description: "Kamera çevrimdışı veya sağlık problemlerini bildirir.", icon: Camera },
   { key: "dailyReports", title: "Günlük Rapor Bildirimleri", description: "Günlük özet ve rapor hazır olduğunda bildirim gönderir.", icon: FileText },
   { key: "criticalAlways", title: "Kritik Alarmları Her Zaman Bildir", description: "Kritik alarmları alarm ayarı kapalı olsa bile gösterir.", icon: Shield },
+];
+
+const notificationSoundRows: Array<{
+  key: NotificationSoundCategory;
+  title: string;
+  description: string;
+}> = [
+  { key: "fire", title: "Yangın Bildirim Sesi", description: "Fire modülünden gelen alarmlarda çalınır." },
+  { key: "area", title: "Alan Kontrol Bildirim Sesi", description: "Area Control modülünden gelen alarmlarda çalınır." },
+  { key: "other", title: "Diğer Bildirimlerin Sesi", description: "Diğer modül bildirimlerinde çalınır." },
 ];
 
 function formatLicenseDate(value?: string) {
@@ -81,34 +98,64 @@ export default function Settings({ authToken, onLogout }: SettingsProps) {
   const [features, setFeatures] = useState<CompanyFeature[]>([]);
   const [isLoadingFeatures, setIsLoadingFeatures] = useState(true);
   const [notificationPreferences, setNotificationPreferences] = useState<NotificationPreferences>(() => loadNotificationPreferences());
+  const [isSavingSounds, setIsSavingSounds] = useState(false);
+  const [isLoadingSounds, setIsLoadingSounds] = useState(Boolean(authToken));
+  const [testingSound, setTestingSound] = useState<NotificationSoundCategory | null>(null);
+  const [isInstallingSound, setIsInstallingSound] = useState(false);
+  const [soundMessage, setSoundMessage] = useState<string | null>(null);
+  const customSoundInputRef = useRef<HTMLInputElement>(null);
+  const soundsBusy = isLoadingSounds || isSavingSounds || isInstallingSound || testingSound !== null;
 
   useEffect(() => {
     if (!authToken) return;
+    let active = true;
 
     const fetchSettings = async () => {
       setIsLoadingThreshold(true);
       setIsLoadingFeatures(true);
+      setIsLoadingSounds(true);
       try {
-        const [thresholdRes, featuresRes] = await Promise.all([
+        const [thresholdRes, featuresRes, soundsRes] = await Promise.all([
           apiGet<{ threshold: number }>("/api/settings/camera-health-threshold/get", authToken).catch(() => null),
           apiGet<CompanyFeature[]>("/api/features/get-company-features", authToken).catch(() => null),
+          apiGet<NotificationSoundPreferences>("/api/auth/notification-sounds", authToken).catch(() => null),
         ]);
 
+        if (!active) return;
         if (thresholdRes && typeof thresholdRes.threshold === "number") {
           setThreshold(thresholdRes.threshold);
         }
         if (featuresRes && Array.isArray(featuresRes)) {
           setFeatures(featuresRes);
         }
+        if (soundsRes) {
+          setNotificationPreferences((current) => {
+            const next = {
+              ...current,
+              sounds: {
+                ...current.sounds,
+                ...soundsRes,
+              },
+            };
+            saveNotificationPreferences(next);
+            return next;
+          });
+        } else {
+          setSoundMessage("Bildirim sesleri yüklenemedi. Bağlantıyı ve backend güncellemesini kontrol edin.");
+        }
       } catch (error) {
         console.error(error);
       } finally {
-        setIsLoadingThreshold(false);
-        setIsLoadingFeatures(false);
+        if (active) {
+          setIsLoadingThreshold(false);
+          setIsLoadingFeatures(false);
+          setIsLoadingSounds(false);
+        }
       }
     };
 
     fetchSettings();
+    return () => { active = false; };
   }, [authToken]);
 
   const getLicenseCards = () => {
@@ -181,6 +228,97 @@ export default function Settings({ authToken, onLogout }: SettingsProps) {
     saveNotificationPreferences(next);
   };
 
+  const handleSoundChange = async (category: NotificationSoundCategory, sound: NotificationSoundId) => {
+    if (!authToken || soundsBusy) return;
+    const sounds = { ...notificationPreferences.sounds, [category]: sound };
+    setSoundMessage(null);
+
+    setIsSavingSounds(true);
+    try {
+      const confirmed = await apiPost<NotificationSoundPreferences>("/api/auth/notification-sounds", sounds, authToken);
+      if (confirmed[category] !== sound) {
+        throw new Error("Backend bildirim sesini doğrulamadı. Backend güncellemesini kontrol edin.");
+      }
+      setNotificationPreferences((current) => {
+        const next = { ...current, sounds: confirmed };
+        saveNotificationPreferences(next);
+        return next;
+      });
+      setSoundMessage("Bildirim sesleri kaydedildi.");
+    } catch (error: any) {
+      setSoundMessage(error?.message ?? "Bildirim sesi kaydedilemedi.");
+    } finally {
+      setIsSavingSounds(false);
+    }
+  };
+
+  const handleTestSound = async (category: NotificationSoundCategory) => {
+    if (!authToken || soundsBusy) return;
+    setTestingSound(category);
+    setSoundMessage(null);
+    try {
+      const confirmed = await apiPost<NotificationSoundPreferences>("/api/auth/notification-sounds", notificationPreferences.sounds, authToken);
+      if (confirmed[category] !== notificationPreferences.sounds[category]) {
+        throw new Error("Backend bildirim sesini doğrulamadı. Backend güncellemesini kontrol edin.");
+      }
+      await apiPost("/api/auth/notification-sounds/test", { category }, authToken);
+      setSoundMessage("Test bildirimi push servisine gönderildi.");
+    } catch (error: any) {
+      setSoundMessage(error?.message ?? "Test bildirimi gönderilemedi.");
+    } finally {
+      setTestingSound(null);
+    }
+  };
+
+  const handleCustomSoundFile = async (file?: File) => {
+    if (!file) return;
+    setIsInstallingSound(true);
+    setSoundMessage(null);
+    try {
+      const soundId = await installCustomNotificationSound(file);
+      const label = file.name.replace(/\.wav$/i, "");
+      const next = {
+        ...notificationPreferences,
+        customSounds: {
+          ...notificationPreferences.customSounds,
+          [soundId]: label || "Özel Ses",
+        },
+      };
+      setNotificationPreferences(next);
+      saveNotificationPreferences(next);
+      setSoundMessage("Özel ses eklendi. Artık listelerden seçebilirsiniz.");
+    } catch (error: any) {
+      setSoundMessage(error?.message ?? "Özel ses eklenemedi.");
+    } finally {
+      setIsInstallingSound(false);
+      if (customSoundInputRef.current) customSoundInputRef.current.value = "";
+    }
+  };
+
+  const previewSound = async (sound: NotificationSoundId) => {
+    if (sound === "default") {
+      setSoundMessage("Varsayılan ses telefonun bildirim ayarına göre çalınır.");
+      return;
+    }
+    try {
+      if (sound.startsWith("custom_")) {
+        await previewCustomNotificationSound(sound);
+      } else {
+        await new Audio("/sounds/" + sound + ".wav").play();
+      }
+    } catch {
+      setSoundMessage("Ses önizlemesi oynatılamadı.");
+    }
+  };
+
+  const availableSoundOptions = [
+    ...notificationSoundOptions,
+    ...Object.entries(notificationPreferences.customSounds).map(([value, label]) => ({
+      value,
+      label: "Özel: " + label,
+    })),
+  ];
+
   return (
     <div className="p-4 space-y-4 border-t border-gray-100/50 pb-[100px]">
       <h2 className="text-xl font-bold text-text-dark mb-2">Ayarlar</h2>
@@ -229,6 +367,80 @@ export default function Settings({ authToken, onLogout }: SettingsProps) {
             );
           })}
 
+          <div className="pt-3 border-t border-gray-100 space-y-3">
+            <div>
+              <div className="text-sm font-medium text-text-dark">Bildirim Sesleri</div>
+              <div className="text-[11px] text-text-muted mt-0.5">Her alarm tipi için farklı bir ses seçebilirsiniz.</div>
+            </div>
+            {notificationSoundRows.map((row) => {
+              const selectedSound = notificationPreferences.sounds[row.key];
+              return (
+                <div key={row.key} className="space-y-1">
+                  <label className="text-xs text-gray-500 font-medium" htmlFor={"notification-sound-" + row.key}>
+                    {row.title}
+                  </label>
+                  <div className="space-y-2">
+                    <select
+                      id={"notification-sound-" + row.key}
+                      className="w-full min-w-0 border border-gray-200 bg-gray-50 rounded-lg p-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary text-text-dark disabled:opacity-50"
+                      value={selectedSound}
+                      disabled={soundsBusy || !authToken}
+                      onChange={(event) => handleSoundChange(row.key, event.target.value as NotificationSoundId)}
+                    >
+                      {availableSoundOptions.map((option) => (
+                        <option key={option.value} value={option.value}>{option.label}</option>
+                      ))}
+                    </select>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => previewSound(selectedSound)}
+                        disabled={soundsBusy}
+                        className="w-10 h-10 shrink-0 flex items-center justify-center rounded-lg border border-gray-200 bg-gray-50 text-text-dark active:bg-gray-100 disabled:opacity-50"
+                        aria-label={row.title + " önizle"}
+                        title="Sesi dinle"
+                      >
+                        <Volume2 className="w-4 h-4" />
+                      </button>
+                      {Capacitor.isNativePlatform() && (
+                        <button
+                          type="button"
+                          onClick={() => handleTestSound(row.key)}
+                          disabled={soundsBusy || !authToken}
+                          className="w-10 h-10 shrink-0 flex items-center justify-center rounded-lg border border-gray-200 bg-gray-50 text-text-dark active:bg-gray-100 disabled:opacity-50"
+                          aria-label={row.title + " test bildirimi"}
+                          title="Test bildirimi gönder"
+                        >
+                          <BellRing className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  <p className="text-[11px] text-text-muted">{row.description}</p>
+                </div>
+              );
+            })}
+            <input
+              ref={customSoundInputRef}
+              type="file"
+              accept=".wav,audio/wav"
+              className="hidden"
+              onChange={(event) => handleCustomSoundFile(event.target.files?.[0])}
+            />
+            <button
+              type="button"
+              disabled={soundsBusy}
+              onClick={() => customSoundInputRef.current?.click()}
+              className="w-full h-10 flex items-center justify-center gap-2 rounded-lg border border-gray-200 bg-gray-50 text-sm font-medium text-text-dark active:bg-gray-100 disabled:opacity-50"
+            >
+              <Upload className="w-4 h-4" />
+              {isInstallingSound ? "Ses ekleniyor..." : "Kendi Sesini Ekle"}
+            </button>
+            <p className="text-[11px] text-text-muted">WAV formatı, en fazla 5 MB ve 29 saniye.</p>
+            {isLoadingSounds && <p className="text-xs text-text-muted" role="status">Bildirim sesleri yükleniyor...</p>}
+            {soundMessage && <p className="text-xs text-text-muted" role="status">{soundMessage}</p>}
+          </div>
+
           <div className="pt-3 border-t border-gray-100">
             <span className="text-xs text-gray-500 font-medium">Bildirim Sıklığı</span>
             <select
@@ -250,13 +462,13 @@ export default function Settings({ authToken, onLogout }: SettingsProps) {
               <input
                 id="minimum-downtime-minutes"
                 type="number"
-                min={0}
+                min={MINIMUM_DOWNTIME_NOTIFICATION_MINUTES}
                 step={1}
                 value={notificationPreferences.minimumDowntimeMinutes}
                 onChange={(event) => {
                   const next = {
                     ...notificationPreferences,
-                    minimumDowntimeMinutes: Math.max(0, Number(event.target.value) || 0),
+                    minimumDowntimeMinutes: Math.max(MINIMUM_DOWNTIME_NOTIFICATION_MINUTES, Number(event.target.value) || 0),
                   };
                   setNotificationPreferences(next);
                   saveNotificationPreferences(next);
