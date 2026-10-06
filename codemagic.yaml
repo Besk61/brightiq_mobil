@@ -99,8 +99,8 @@ workflows:
       # --- İŞTE CAPACITOR'I ATLATIP APPLE'IN SÜRÜM ENGELİNİ YIKAN KRİTİK ADIM ---
       - name: 7. Sürüm Numarasını Yükselt, Derle ve .ipa İmzala
         script: |
-          echo "Apple için sürüm numarası 1.0.3 ve derleme numarası dinamik olarak ayarlanıyor..."
-          cd ios/App && agvtool new-marketing-version 1.0.3
+          echo "Apple için sürüm numarası 1.0.4 ve derleme numarası dinamik olarak ayarlanıyor..."
+          cd ios/App && agvtool new-marketing-version 1.0.4
           agvtool new-version -all $BUILD_NUMBER
           cd ../..
           
