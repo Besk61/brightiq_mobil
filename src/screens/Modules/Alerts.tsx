@@ -1,11 +1,12 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { apiGet, apiPost, resolveImageUrl } from "../../api";
 import { Alert } from "../../types";
-import { Search, Filter, MessageSquare, X, CheckCircle, XCircle, Play, Pause, ChevronRight, User, Plus, AlertCircle, Trash2 } from "lucide-react";
+import { Search, Filter, MessageSquare, X, CheckCircle, XCircle, Play, Pause, ChevronLeft, ChevronRight, RefreshCw, User, Plus, AlertCircle, Trash2 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
 import { cn } from "../../utils";
 import AuthenticatedImage from "../../components/AuthenticatedImage";
+import { EVENT_PAGE_SIZE, fetchEventPage } from "../../eventPagination";
 
 interface AlertsModuleProps {
   authToken?: string;
@@ -38,7 +39,7 @@ interface CameraFilterOption {
 }
 
 function formatDate(date: Date) {
-  return date.toISOString().slice(0, 10);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
 function formatDateSafe(dateString: string | undefined | null) {
@@ -56,7 +57,11 @@ function getEventDateRange(filterTime: string, customDateRange: { start: string;
   const endDate = new Date();
   const startDate = new Date();
 
-  if (filterTime.startsWith("Bug") || filterTime === "Son 1 Saat") {
+  if (filterTime === "Son 1 Saat") {
+    return { startDate: new Date(endDate.getTime() - 60 * 60 * 1000), endDate };
+  }
+
+  if (filterTime.startsWith("Bug")) {
     return { startDate: endDate, endDate };
   }
 
@@ -67,7 +72,7 @@ function getEventDateRange(filterTime: string, customDateRange: { start: string;
     };
   }
 
-  startDate.setDate(endDate.getDate() - 7);
+  startDate.setFullYear(1970, 0, 1);
   return { startDate, endDate };
 }
 
@@ -91,7 +96,13 @@ export default function AlertsModule({ authToken }: AlertsModuleProps) {
   const [commentAlertId, setCommentAlertId] = useState<number | null>(null);
   const [activeFilterCameraId, setActiveFilterCameraId] = useState("all");
   const [newComment, setNewComment] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const [pageIndex, setPageIndex] = useState(0);
+  const [pageOffsets, setPageOffsets] = useState([0]);
+  const [nextOffset, setNextOffset] = useState<number | null>(null);
+  const listStartRef = useRef<HTMLDivElement>(null);
+  const pageOffset = pageOffsets[pageIndex] ?? 0;
   const [scanSuccessStates, setScanSuccessStates] = useState<Record<number, boolean | null>>({});
   const [eventRefreshKey, setEventRefreshKey] = useState(0);
   const [cameraOptions, setCameraOptions] = useState<CameraFilterOption[]>([]);
@@ -112,10 +123,14 @@ export default function AlertsModule({ authToken }: AlertsModuleProps) {
   }, [selectedImage]);
 
   useEffect(() => {
-    const handleEventsUpdated = () => setEventRefreshKey((value) => value + 1);
+    const handleEventsUpdated = () => {
+      if (pageIndex !== 0) return;
+      setPageOffsets([0]);
+      setEventRefreshKey((value) => value + 1);
+    };
     window.addEventListener(EVENTS_UPDATED_EVENT, handleEventsUpdated);
     return () => window.removeEventListener(EVENTS_UPDATED_EVENT, handleEventsUpdated);
-  }, []);
+  }, [pageIndex]);
 
   useEffect(() => {
     if (!authToken) return;
@@ -130,14 +145,30 @@ export default function AlertsModule({ authToken }: AlertsModuleProps) {
   useEffect(() => {
     if (!authToken) return;
 
+    const controller = new AbortController();
     const fetchAlerts = async () => {
       setIsLoading(true);
+      setLoadError(false);
+      setNextOffset(null);
       try {
         const { startDate, endDate } = getEventDateRange(activeFilterTime, activeCustomDateRange);
         const cameraQuery = activeFilterCameraId !== "all" ? `&cameraId=${encodeURIComponent(activeFilterCameraId)}` : "";
-        const events = await apiGet<EventResponse[]>(
-          `/api/event/events?startDate=${formatDate(startDate)}&endDate=${formatDate(endDate)}&limit=30&offset=0${cameraQuery}`,
-          authToken
+        const { events, nextOffset: followingOffset } = await fetchEventPage<EventResponse>(
+          (offset, limit) => apiGet<EventResponse[]>(
+            `/api/event/events?startDate=${formatDate(startDate)}&endDate=${formatDate(endDate)}&limit=${limit}&offset=${offset}${cameraQuery}`,
+            authToken,
+            controller.signal
+          ),
+          (event) => {
+            if (!isWithinActiveTimeFilter(event.createdAt, activeFilterTime)) return false;
+            if (activeFilterModules.includes("Tümü")) return true;
+            const searchable = `${event.module?.name ?? ""} ${event.name}`.toLowerCase();
+            return activeFilterModules.some((module) =>
+              (moduleMap[module] || [module.toLowerCase()]).some((keyword) => searchable.includes(keyword))
+            );
+          },
+          pageOffset,
+          controller.signal
         );
 
         const initialScanStates: Record<number, boolean | null> = {};
@@ -165,15 +196,20 @@ export default function AlertsModule({ authToken }: AlertsModuleProps) {
           };
         }));
         setScanSuccessStates(prev => ({ ...prev, ...initialScanStates }));
+        setNextOffset(followingOffset);
       } catch (error) {
+        if (controller.signal.aborted) return;
         console.error(error);
+        setLoadError(true);
+        setAlerts([]);
       } finally {
-        setIsLoading(false);
+        if (!controller.signal.aborted) setIsLoading(false);
       }
     };
 
     fetchAlerts();
-  }, [authToken, activeFilterTime, activeCustomDateRange, activeFilterModules, activeFilterCameraId, eventRefreshKey]);
+    return () => controller.abort();
+  }, [authToken, activeFilterTime, activeCustomDateRange, activeFilterModules, activeFilterCameraId, eventRefreshKey, pageOffset]);
 
   const moduleMap: Record<string, string[]> = {
     "Yangın": ["fire detection", "yangın", "fire", "smoke"],
@@ -183,25 +219,38 @@ export default function AlertsModule({ authToken }: AlertsModuleProps) {
     "Sigara Tespiti": ["sigara tespiti", "smoking", "sigara", "smoke detection"],
   };
 
-  const filteredAlerts = alerts.filter((alert) => {
-    if (!isWithinActiveTimeFilter(alert.createdAt, activeFilterTime)) {
-      return false;
+  const changePage = (direction: -1 | 1) => {
+    if (isLoading || (direction === -1 && pageIndex === 0) || (direction === 1 && nextOffset === null)) return;
+    if (direction === 1) {
+      setPageOffsets((offsets) => [...offsets.slice(0, pageIndex + 1), nextOffset!]);
     }
+    setIsLoading(true);
+    setCommentAlertId(null);
+    setSelectedImage(null);
+    setPageIndex((index) => index + direction);
+    listStartRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
 
-    if (!activeFilterModules.includes("Tümü")) {
-      const typeLower = alert.type.toLowerCase();
-      const moduleLower = alert.module.toLowerCase();
-      const eventNameLower = alert.eventName.toLowerCase();
-
-      const matches = activeFilterModules.some(filterItem => {
-        const keywords = moduleMap[filterItem] || [filterItem.toLowerCase()];
-        return keywords.some(kw => typeLower.includes(kw) || moduleLower.includes(kw) || eventNameLower.includes(kw));
-      });
-      
-      if (!matches) return false;
-    }
-    return true;
-  });
+  const pagination = (label: string) => (
+    <nav aria-label={label} className="flex min-h-14 items-center justify-between gap-3 border-y border-gray-100 py-2">
+      <button type="button" aria-label="Önceki sayfa" title="Önceki sayfa: daha yeni kayıtlar"
+        disabled={isLoading || pageIndex === 0} onClick={() => changePage(-1)}
+        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-gray-200 bg-white text-text-dark disabled:opacity-30">
+        <ChevronLeft className="h-5 w-5" />
+      </button>
+      <div className="min-w-0 text-center" aria-live="polite" aria-atomic="true">
+        <div className="text-sm font-semibold text-text-dark">Sayfa {pageIndex + 1}</div>
+        <div className="min-h-4 text-xs text-text-muted">
+          {isLoading ? "Yükleniyor..." : loadError ? "Yüklenemedi" : `${alerts.length} kayıt`}
+        </div>
+      </div>
+      <button type="button" aria-label="Sonraki sayfa" title="Sonraki sayfa: daha eski kayıtlar"
+        disabled={isLoading || loadError || nextOffset === null} onClick={() => changePage(1)}
+        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-gray-200 bg-white text-text-dark disabled:opacity-30">
+        <ChevronRight className="h-5 w-5" />
+      </button>
+    </nav>
+  );
 
   const toggleFilterModule = (m: string) => {
     if (m === "Tümü") {
@@ -219,6 +268,10 @@ export default function AlertsModule({ authToken }: AlertsModuleProps) {
   };
 
   const handleApplyFilter = () => {
+    setIsLoading(true);
+    setPageIndex(0);
+    setPageOffsets([0]);
+    setEventRefreshKey((value) => value + 1);
     setActiveFilterModules(filterModules.length > 0 ? filterModules : ["Tümü"]);
     setActiveFilterTime(filterTime);
     setActiveCustomDateRange(customDateRange);
@@ -297,7 +350,7 @@ export default function AlertsModule({ authToken }: AlertsModuleProps) {
   const activeCommentsAlert = alerts.find((a) => a.id === commentAlertId);
 
   return (
-    <div className="space-y-4">
+    <div ref={listStartRef} className="space-y-4 scroll-mt-28">
       <div className="flex gap-2 relative">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-2.5 w-4 h-4 text-gray-400" />
@@ -309,6 +362,8 @@ export default function AlertsModule({ authToken }: AlertsModuleProps) {
         </div>
         <button
           onClick={() => setIsFilterOpen(true)}
+          aria-label="Filtrele"
+          title="Filtrele"
           className={cn(
             "p-2 bg-white border rounded-xl transition-colors",
             !activeFilterModules.includes("Tümü") || activeFilterTime !== "Tümü" || activeFilterCameraId !== "all"
@@ -320,13 +375,23 @@ export default function AlertsModule({ authToken }: AlertsModuleProps) {
         </button>
       </div>
 
-      <div className="space-y-4">
+      {pagination("Üst sayfalama")}
+
+      <div className="space-y-4" aria-busy={isLoading}>
         {isLoading ? (
           <div className="rounded-3xl border border-gray-100 bg-gray-50 p-6 text-center text-sm text-gray-500">Veriler yükleniyor...</div>
-        ) : filteredAlerts.length === 0 ? (
+        ) : loadError ? (
+          <div className="py-10 text-center text-sm text-text-muted" role="alert">
+            <p>Bildirimler yüklenemedi.</p>
+            <button type="button" onClick={() => setEventRefreshKey((value) => value + 1)}
+              className="mx-auto mt-3 flex min-h-11 items-center gap-2 text-primary">
+              <RefreshCw className="h-4 w-4" /> Tekrar dene
+            </button>
+          </div>
+        ) : alerts.length === 0 ? (
           <div className="py-10 text-center text-gray-400 text-sm">Listelenecek alarm bulunamadı.</div>
         ) : (
-          filteredAlerts.map((alert) => (
+          alerts.map((alert) => (
             <div key={alert.id} className="bg-white rounded-2xl overflow-hidden shadow-sm border border-gray-100 relative">
               <AuthenticatedImage
                 src={alert.image || `https://picsum.photos/seed/alert-${alert.id}/800/600`}
@@ -395,6 +460,8 @@ export default function AlertsModule({ authToken }: AlertsModuleProps) {
           ))
         )}
       </div>
+
+      {alerts.length > 0 && !loadError && !isLoading && pagination("Alt sayfalama")}
 
       {isFilterOpen && (
         <div className="fixed inset-0 z-[60] bg-black/50 flex flex-col justify-end">
@@ -487,7 +554,8 @@ export default function AlertsModule({ authToken }: AlertsModuleProps) {
             </div>
             <button
               onClick={handleApplyFilter}
-              className="w-full bg-primary text-white py-3 rounded-xl font-bold mb-4 flex-shrink-0"
+              disabled={filterTime === "Tarih Aralığı" && (!customDateRange.start || !customDateRange.end || customDateRange.start > customDateRange.end)}
+              className="w-full bg-primary text-white py-3 rounded-xl font-bold mb-4 flex-shrink-0 disabled:opacity-40"
             >
               Filtreyi Uygula
             </button>

@@ -65,7 +65,7 @@ export async function apiPost<T>(path: string, body: unknown, token?: string) {
   });
 }
 
-export async function apiGet<T>(path: string, token?: string) {
+export async function apiGet<T>(path: string, token?: string, signal?: AbortSignal) {
   const headers: Record<string, string> = {};
 
   if (token) {
@@ -75,6 +75,7 @@ export async function apiGet<T>(path: string, token?: string) {
   return fetchJson<T>(path, {
     method: "GET",
     headers,
+    signal,
   });
 }
 
