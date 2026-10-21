@@ -14,6 +14,7 @@ workflows:
         distribution_type: app_store
         bundle_identifier: com.arvonas.brightiq
       vars:
+        APP_VERSION: "1.0.5"
         XCODE_WORKSPACE: "ios/App/App.xcworkspace"
         XCODE_SCHEME: "App"
       node: 22
@@ -99,8 +100,9 @@ workflows:
       # --- İŞTE CAPACITOR'I ATLATIP APPLE'IN SÜRÜM ENGELİNİ YIKAN KRİTİK ADIM ---
       - name: 7. Sürüm Numarasını Yükselt, Derle ve .ipa İmzala
         script: |
-          echo "Apple için sürüm numarası 1.0.4 ve derleme numarası dinamik olarak ayarlanıyor..."
-          cd ios/App && agvtool new-marketing-version 1.0.4
+          : "${APP_VERSION:?APP_VERSION must be set in codemagic.yaml}"
+          echo "Apple için sürüm numarası $APP_VERSION ve derleme numarası $BUILD_NUMBER olarak ayarlanıyor..."
+          cd ios/App && agvtool new-marketing-version "$APP_VERSION"
           agvtool new-version -all $BUILD_NUMBER
           cd ../..
           
