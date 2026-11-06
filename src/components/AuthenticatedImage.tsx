@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { fetchImageAsBlob } from "../api";
 import { Loader2, Search } from "lucide-react";
 import { cn } from "../utils";
@@ -10,6 +10,8 @@ interface AuthenticatedImageProps extends React.ImgHTMLAttributes<HTMLImageEleme
   authToken?: string;
   /** Fallback src shown when image fails to load */
   fallbackSrc?: string;
+  /** Keep waiting and retry transient image failures instead of displaying a fallback. */
+  retryOnError?: boolean;
   /** Custom container classes */
   containerClassName?: string;
   /** If provided, renders an interactive overlay with a Search icon, and becomes clickable ONLY when fully loaded */
@@ -29,6 +31,7 @@ export default function AuthenticatedImage({
   src,
   authToken,
   fallbackSrc,
+  retryOnError = false,
   alt,
   className,
   containerClassName,
@@ -40,6 +43,12 @@ export default function AuthenticatedImage({
   const [blobUrl, setBlobUrl] = useState<string | null>(null);
   const [hasError, setHasError] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [retryAttempt, setRetryAttempt] = useState(0);
+  const retryDelay = useRef(1000);
+
+  useEffect(() => {
+    retryDelay.current = 1000;
+  }, [src, authToken]);
 
   useEffect(() => {
     setHasError(false);
@@ -61,7 +70,7 @@ export default function AuthenticatedImage({
     setIsLoading(true);
     setBlobUrl(null);
 
-    fetchImageAsBlob(src, authToken).then((url) => {
+    fetchImageAsBlob(src, authToken, retryAttempt > 0).then((url) => {
       if (cancelled) return;
 
       if (!url) {
@@ -75,10 +84,19 @@ export default function AuthenticatedImage({
     return () => {
       cancelled = true;
     };
-  }, [src, authToken]);
+  }, [src, authToken, retryAttempt]);
 
-  const displaySrc = hasError ? (fallbackSrc ?? undefined) : (blobUrl ?? undefined);
-  const isInteractive = onImageClick && !isLoading && displaySrc;
+  useEffect(() => {
+    if (!hasError || !retryOnError || !src) return;
+    const timer = window.setTimeout(() => setRetryAttempt(attempt => attempt + 1), retryDelay.current);
+    retryDelay.current = Math.min(retryDelay.current * 2, 15000);
+    return () => window.clearTimeout(timer);
+  }, [hasError, retryOnError, src, authToken, retryAttempt]);
+
+  const waitingForRetry = Boolean(src && retryOnError && hasError);
+  const showLoading = isLoading || waitingForRetry;
+  const displaySrc = hasError ? (retryOnError ? undefined : fallbackSrc) : (blobUrl ?? undefined);
+  const isInteractive = onImageClick && !showLoading && displaySrc;
 
   return (
     <div
@@ -100,10 +118,13 @@ export default function AuthenticatedImage({
           alt={alt}
           className={cn(
             className,
-            isLoading ? "opacity-0" : "opacity-100",
+            showLoading ? "opacity-0" : "opacity-100",
             "transition-opacity duration-300"
           )}
-          onLoad={() => setIsLoading(false)}
+          onLoad={() => {
+            retryDelay.current = 1000;
+            setIsLoading(false);
+          }}
           onError={() => {
             setHasError(true);
             setIsLoading(false);
@@ -112,8 +133,8 @@ export default function AuthenticatedImage({
       ) : null}
 
       {/* Loading overlay */}
-      {isLoading && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-gray-100/50 backdrop-blur-sm z-10">
+      {showLoading && (
+        <div role="status" aria-label={loadingLabel || "Görsel yükleniyor"} className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-gray-100/50 backdrop-blur-sm z-10">
           <Loader2 className="w-5 h-5 animate-spin text-primary" />
           {loadingLabel && (
             <span className="text-xs font-medium text-text-muted">{loadingLabel}</span>

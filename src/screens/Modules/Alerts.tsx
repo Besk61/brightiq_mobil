@@ -394,9 +394,10 @@ export default function AlertsModule({ authToken }: AlertsModuleProps) {
           alerts.map((alert) => (
             <div key={alert.id} className="bg-white rounded-2xl overflow-hidden shadow-sm border border-gray-100 relative">
               <AuthenticatedImage
-                src={alert.image || `https://picsum.photos/seed/alert-${alert.id}/800/600`}
+                src={alert.image || null}
                 authToken={authToken}
-                fallbackSrc={`https://picsum.photos/seed/alert-${alert.id}/800/600`}
+                retryOnError
+                loadingLabel="Görsel yükleniyor..."
                 alt={alert.type}
                 className="w-full h-full object-cover"
                 containerClassName="w-full h-40 bg-gray-200"
@@ -632,6 +633,8 @@ export default function AlertsModule({ authToken }: AlertsModuleProps) {
                 <AuthenticatedImage
                   src={selectedImage}
                   authToken={authToken}
+                  retryOnError
+                  loadingLabel="Görsel yükleniyor..."
                   className="w-full h-full object-contain"
                   containerClassName="w-full h-full"
                   alt="Enlarged Alert"

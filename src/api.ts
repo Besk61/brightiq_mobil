@@ -84,13 +84,18 @@ export async function apiGet<T>(path: string, token?: string, signal?: AbortSign
  * a local blob URL suitable for use in <img> src attributes.
  * Returns null if the URL is empty or the fetch fails.
  */
-export async function fetchImageAsBlob(url: string, token?: string): Promise<string | null> {
+export async function fetchImageAsBlob(url: string, token?: string, forceRefresh = false): Promise<string | null> {
   if (!url) return null;
 
   // If it's already a data URI, return as-is
   if (url.startsWith("data:")) return url;
 
   const cacheKey = `${token ?? "public"}::${url}`;
+  if (forceRefresh) {
+    const previous = imageBlobCache.get(cacheKey);
+    imageBlobCache.delete(cacheKey);
+    if (previous?.startsWith("blob:")) URL.revokeObjectURL(previous);
+  }
   const cached = imageBlobCache.get(cacheKey);
   if (cached) {
     imageBlobCache.delete(cacheKey);
@@ -106,7 +111,7 @@ export async function fetchImageAsBlob(url: string, token?: string): Promise<str
     if (token && url.includes("download?path=")) {
       headers["x-access-token"] = token;
     }
-    const response = await fetch(url, { headers });
+    const response = await fetch(url, { headers, cache: forceRefresh ? "reload" : "default" });
     if (!response.ok) return null;
     const blob = await response.blob();
     const objectUrl = URL.createObjectURL(blob);
